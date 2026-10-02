@@ -58,6 +58,31 @@ abstract class TestCase extends Testbench
         $config->set('one-record.server.base_url', self::BASE);
         $config->set('one-record.server.base_path', self::BASE_PATH);
         $config->set('one-record.server.data_holder', self::HOLDER);
+        $config->set('one-record.storage.driver', $this->storageDriver());
+    }
+
+    /**
+     * The booted application, typed (Testbench declares it nullable).
+     */
+    protected function app(): Application
+    {
+        $app = $this->app;
+        self::assertInstanceOf(Application::class, $app);
+
+        return $app;
+    }
+
+    protected function config(): Repository
+    {
+        return $this->app()->make(Repository::class);
+    }
+
+    /**
+     * The SDK's in-memory stores unless a test case is about the database ones.
+     */
+    protected function storageDriver(): string
+    {
+        return 'array';
     }
 
     private static function env(string $name, string $default): string
