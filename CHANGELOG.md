@@ -8,6 +8,10 @@ All notable changes to this package are documented here. The format follows
 
 ### Added
 
+- Token issuing for this host's own partners: the SDK's client-credentials
+  token endpoint on a configurable route, credentials stored hashed in the
+  database, a JWKS route publishing the signing key, and
+  `one-record:client:create` to register a partner.
 - `database` storage driver: query-builder implementations of every SDK
   store SPI (logistics objects with one row per revision and an atomic
   compare-and-set for new revisions, logistics events with the spec's

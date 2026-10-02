@@ -10,19 +10,26 @@ use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Foundation\CachesRoutes;
+use Illuminate\Contracts\Hashing\Hasher;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Log\LogManager;
 use Illuminate\Support\ServiceProvider;
 use InvalidArgumentException;
+use LambdaTwelve\OneRecord\Auth\ClientCredentialsVerifier;
+use LambdaTwelve\OneRecord\Auth\InMemoryClientCredentials;
+use LambdaTwelve\OneRecord\Auth\Jwt\Rs256Signer;
+use LambdaTwelve\OneRecord\Auth\TokenEndpoint;
 use LambdaTwelve\OneRecord\Laravel\Auth\AuthenticatorFactory;
 use LambdaTwelve\OneRecord\Laravel\Bridge\LaravelClock;
 use LambdaTwelve\OneRecord\Laravel\Bridge\LaravelEventDispatcher;
 use LambdaTwelve\OneRecord\Laravel\Config\ServerConfigFactory;
+use LambdaTwelve\OneRecord\Laravel\Console\CreateClientCommand;
 use LambdaTwelve\OneRecord\Laravel\Http\Controllers\ServerController;
 use LambdaTwelve\OneRecord\Laravel\Http\TransactionalRequestHandler;
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseAccessDelegationStore;
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseActionRequestStore;
+use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseClientCredentials;
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseLogisticsEventStore;
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseLogisticsObjectStore;
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseNotificationOutbox;
@@ -95,6 +102,10 @@ final class OneRecordServiceProvider extends ServiceProvider
         }
         if ((bool) $this->config('routes.register', true) && !($this->app instanceof CachesRoutes && $this->app->routesAreCached())) {
             OneRecord::routes();
+            OneRecord::tokenRoutes();
+        }
+        if ($this->app->runningInConsole()) {
+            $this->commands([CreateClientCommand::class]);
         }
     }
 
@@ -210,6 +221,8 @@ final class OneRecordServiceProvider extends ServiceProvider
             };
         });
 
+        $this->registerTokenIssuing();
+
         $this->app->singleton(Services::class, static fn(Container $app): Services => new Services(
             config: $app->make(ServerConfig::class),
             objects: $app->make(LogisticsObjectStore::class),
@@ -239,6 +252,48 @@ final class OneRecordServiceProvider extends ServiceProvider
                     ? new TransactionalRequestHandler($server, $this->connection($app))
                     : $server;
             });
+    }
+
+    /**
+     * The token endpoint this host offers its own partners: the SDK's signer
+     * and endpoint over credentials stored (hashed) in the database.
+     */
+    private function registerTokenIssuing(): void
+    {
+        $this->app->singleton(Rs256Signer::class, function (Container $app): Rs256Signer {
+            $settings = $this->arrayConfig('auth.token_endpoint');
+            $key = $settings['private_key'] ?? null;
+            if (!\is_string($key) || trim($key) === '') {
+                throw new LogicException('Issuing tokens needs an RSA private key in one-record.auth.token_endpoint.private_key (ONE_RECORD_PRIVATE_KEY).');
+            }
+            $issuer = $settings['issuer'] ?? null;
+            $keyId = $settings['key_id'] ?? null;
+
+            return new Rs256Signer(
+                $key,
+                \is_string($issuer) && $issuer !== '' ? $issuer : $app->make(ServerConfig::class)->baseUrl,
+                $app->make(ClockInterface::class),
+                \is_string($keyId) && $keyId !== '' ? $keyId : null,
+            );
+        });
+        $this->app->singleton(ClientCredentialsVerifier::class, fn(Container $app): ClientCredentialsVerifier => $this->driver() === 'database'
+            ? new DatabaseClientCredentials($this->connection($app), $app->make(Tables::class), $app->make(Hasher::class), $app->make(ClockInterface::class))
+            : new InMemoryClientCredentials());
+        $this->app->singleton(TokenEndpoint::class, function (Container $app): TokenEndpoint {
+            $settings = $this->arrayConfig('auth.token_endpoint');
+            $ttl = $settings['ttl'] ?? 3600;
+            $audience = $settings['audience'] ?? null;
+
+            return new TokenEndpoint(
+                $app->make(ClientCredentialsVerifier::class),
+                $app->make(Rs256Signer::class),
+                $app->make(ResponseFactoryInterface::class),
+                $app->make(StreamFactoryInterface::class),
+                is_numeric($ttl) ? (int) $ttl : 3600,
+                \is_string($audience) && $audience !== '' ? $audience : null,
+                self::logger($app),
+            );
+        });
     }
 
     /**

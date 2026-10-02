@@ -7,7 +7,9 @@ namespace LambdaTwelve\OneRecord\Laravel;
 use Illuminate\Container\Container;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Routing\Router;
+use LambdaTwelve\OneRecord\Laravel\Http\Controllers\JwksController;
 use LambdaTwelve\OneRecord\Laravel\Http\Controllers\ServerController;
+use LambdaTwelve\OneRecord\Laravel\Http\Controllers\TokenController;
 use LambdaTwelve\OneRecord\Server\ServerConfig;
 
 /**
@@ -39,6 +41,36 @@ final class OneRecord
         });
         // Routes named after being added are only findable by name once the lookups are rebuilt;
         // Laravel does this after boot, which is too early for a host calling this from a booted app.
+        $router->getRoutes()->refreshNameLookups();
+    }
+
+    /**
+     * Mounts the token endpoint (POST, client-credentials grant) and the JWKS
+     * document, each only when enabled in `one-record.auth`. They sit outside
+     * the server's base path, at the configured absolute paths.
+     *
+     * @param RouteOptions $options overrides for the `one-record.routes` config (the token route adds its own throttle middleware from config)
+     */
+    public static function tokenRoutes(array $options = []): void
+    {
+        $app = Container::getInstance();
+        $router = $app->make(Router::class);
+        $auth = $app->make(Repository::class)->get('one-record.auth', []);
+        $auth = \is_array($auth) ? $auth : [];
+        $token = \is_array($auth['token_endpoint'] ?? null) ? $auth['token_endpoint'] : [];
+        $jwks = \is_array($auth['jwks'] ?? null) ? $auth['jwks'] : [];
+
+        $router->group(self::group($app, $options, ''), static function (Router $router) use ($token, $jwks): void {
+            if (($token['enabled'] ?? false) === true) {
+                $middleware = $token['middleware'] ?? [];
+                $router->post(\is_string($token['path'] ?? null) ? $token['path'] : '/oauth/token', TokenController::class)
+                    ->middleware(\is_array($middleware) ? array_values(array_filter($middleware, 'is_string')) : [])
+                    ->name('token');
+            }
+            if (($jwks['enabled'] ?? false) === true) {
+                $router->get(\is_string($jwks['path'] ?? null) ? $jwks['path'] : '/.well-known/jwks.json', JwksController::class)->name('jwks');
+            }
+        });
         $router->getRoutes()->refreshNameLookups();
     }
 
