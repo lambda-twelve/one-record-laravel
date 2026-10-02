@@ -17,6 +17,7 @@ use LambdaTwelve\OneRecord\Laravel\Support\Timestamps;
 use LambdaTwelve\OneRecord\Rdf\Iri;
 use LambdaTwelve\OneRecord\Server\Spi\ActionRequestStore;
 use LambdaTwelve\OneRecord\Server\Spi\AuditTrailQuery;
+use LambdaTwelve\OneRecord\Server\Spi\StoreException;
 use LambdaTwelve\OneRecord\Spec\ApiVersion;
 
 /**
@@ -101,6 +102,47 @@ final class DatabaseActionRequestStore implements ActionRequestStore
         }
 
         return array_map(self::hydrate(...), Row::all($q));
+    }
+
+    public function accepted(ActionRequestType $type): array
+    {
+        $q = $this->db->table($this->tables->actionRequests())
+            ->where('type', $type->name)
+            ->where('status', RequestStatus::Accepted->shortName())
+            ->orderBy('requested_at');
+
+        return array_map(self::hydrate(...), Row::all($q));
+    }
+
+    public function transition(ActionRequest $request, RequestStatus $expectedCurrent): void
+    {
+        $this->transaction(function () use ($request, $expectedCurrent): void {
+            $hash = IriHash::of($request->iri);
+            $expires = match (true) {
+                $request->payload instanceof Subscription => $request->payload->expiresAt,
+                $request->payload instanceof AccessDelegation => $request->payload->expiresAt,
+                default => null,
+            };
+            $now = Timestamps::toDb($request->lastModified());
+            $version = ApiVersion::latest();
+            // Compare-and-set on the stored status: a decision made on a stale snapshot must not win.
+            $updated = $this->db->table($this->tables->actionRequests())
+                ->where('iri_hash', $hash)
+                ->where('status', $expectedCurrent->shortName())
+                ->update([
+                    'status' => $request->status->shortName(),
+                    'status_since' => Timestamps::toDb($request->statusSince),
+                    'last_modified' => $now,
+                    'expires_at' => Timestamps::toDb($expires),
+                    'api_version' => $version->value,
+                    'document' => Json::encode($request->toJsonLd($version), false),
+                    'updated_at' => $now,
+                ]);
+            if ($updated === 0) {
+                $current = $this->get($request->iri) ?? throw StoreException::notFound($request->iri);
+                throw StoreException::statusConflict($request->iri, $expectedCurrent->shortName(), $current->status->shortName());
+            }
+        });
     }
 
     public function pendingChanges(Iri $logisticsObject): array

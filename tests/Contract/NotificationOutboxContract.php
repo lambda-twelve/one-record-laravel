@@ -31,11 +31,13 @@ trait NotificationOutboxContract
             $recipient,
             new Notification(NotificationEventType::LogisticsObjectUpdated, $piece->iri, Cargo::Piece, new Iri(Documents::BASE . '/action-requests/c1'), [Cargo::goodsDescription], [], $piece),
             Documents::at('2026-10-02T12:00:00.000Z'),
+            'n-1',
         ));
         $this->outbox()->enqueue(new OutboundNotification(
             new Iri('https://agent.example/no-logistics-objects-path'),
             new Notification(NotificationEventType::LogisticsObjectCreated, Documents::iri('p2'), Cargo::Piece),
             Documents::at('2026-10-02T12:01:00.000Z'),
+            'n-2',
         ));
 
         $all = $this->enqueued();

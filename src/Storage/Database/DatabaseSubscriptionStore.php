@@ -92,6 +92,25 @@ final class DatabaseSubscriptionStore implements SubscriptionStore
         ]);
     }
 
+    public function withdraw(Subscription $subscription): void
+    {
+        // Offers carry no subscriber column; match on the stored document's subscriber.
+        $rows = $this->db->table($this->tables->subscriptionOffers())
+            ->where('topic_type', $subscription->topicType->shortName())
+            ->where('topic_hash', IriHash::of($subscription->topic))
+            ->get(['id', 'document']);
+        foreach ($rows as $row) {
+            $document = $row->document ?? null;
+            if (!\is_string($document)) {
+                continue;
+            }
+            $offered = Subscription::fromJsonLd($document);
+            if ($offered->subscriber->equals($subscription->subscriber)) {
+                $this->db->table($this->tables->subscriptionOffers())->where('id', $row->id)->delete();
+            }
+        }
+    }
+
     public function withdrawOffers(TopicType $topicType, string $topic): void
     {
         $this->db->table($this->tables->subscriptionOffers())

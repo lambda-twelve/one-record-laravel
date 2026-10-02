@@ -21,7 +21,7 @@ use LambdaTwelve\OneRecord\Server\DataHolder;
 use LambdaTwelve\OneRecord\Server\Event\ActionRequestCreated;
 use LambdaTwelve\OneRecord\Server\Event\LogisticsObjectCreated;
 use LambdaTwelve\OneRecord\Server\Event\LogisticsObjectRevised;
-use LambdaTwelve\OneRecord\Server\InMemory\InMemoryAccessPolicy;
+use LambdaTwelve\OneRecord\Server\GrantAccessPolicy;
 use LambdaTwelve\OneRecord\Server\ServerConfig;
 use LambdaTwelve\OneRecord\Server\Services;
 use LambdaTwelve\OneRecord\Server\Spi\AccessPolicy;
@@ -158,10 +158,10 @@ abstract class ServerFlowTestCase extends TestCase
             ->build($this->app()->make(ServerConfig::class)->logisticsObjectIri($id));
     }
 
-    protected function policy(): InMemoryAccessPolicy
+    protected function policy(): GrantAccessPolicy
     {
         $policy = $this->app()->make(AccessPolicy::class);
-        self::assertInstanceOf(InMemoryAccessPolicy::class, $policy);
+        self::assertInstanceOf(GrantAccessPolicy::class, $policy);
 
         return $policy;
     }

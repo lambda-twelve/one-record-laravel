@@ -19,7 +19,7 @@ use LambdaTwelve\OneRecord\Model\UuidIriMinter;
 use LambdaTwelve\OneRecord\Rdf\Iri;
 use LambdaTwelve\OneRecord\Server\ActionRequests;
 use LambdaTwelve\OneRecord\Server\DataHolder;
-use LambdaTwelve\OneRecord\Server\InMemory\InMemoryAccessPolicy;
+use LambdaTwelve\OneRecord\Server\GrantAccessPolicy;
 use LambdaTwelve\OneRecord\Server\InMemory\InMemoryLogisticsObjectStore;
 use LambdaTwelve\OneRecord\Server\InMemory\InMemoryNotificationOutbox;
 use LambdaTwelve\OneRecord\Server\OneRecordServer;
@@ -112,7 +112,7 @@ final class ServiceProviderTest extends TestCase
         $this->config()->set('one-record.policy.internal_agents', ['https://erp.example/agent']);
         $policy = $this->app()->make(AccessPolicy::class);
 
-        self::assertInstanceOf(InMemoryAccessPolicy::class, $policy);
+        self::assertInstanceOf(GrantAccessPolicy::class, $policy);
         self::assertSame(Decision::Allow, $policy->decide(new Agent(new Iri(self::HOLDER)), Action::CreateLogisticsObject, null));
         self::assertSame(Decision::Allow, $policy->decide(new Agent(new Iri('https://erp.example/agent')), Action::DecideActionRequest, new Iri(self::BASE . '/one-record/action-requests/x')));
         self::assertSame(Decision::Forbid, $policy->decide(new Agent(new Iri(self::STRANGER)), Action::ReadLogisticsObject, new Iri(self::BASE . '/one-record/logistics-objects/x')));

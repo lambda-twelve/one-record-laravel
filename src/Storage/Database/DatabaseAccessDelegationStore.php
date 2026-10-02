@@ -73,7 +73,7 @@ final class DatabaseAccessDelegationStore implements AccessDelegationStore
 
     /**
      * Removes the holder's own grants for one agent on one object (the
-     * counterpart of InMemoryAccessPolicy::allow()). Not part of the SPI.
+     * counterpart of GrantAccessPolicy::allow()). Not part of the SPI.
      */
     public function revokeDirect(Iri $agent, Iri $logisticsObject): void
     {

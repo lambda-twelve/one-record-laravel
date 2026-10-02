@@ -45,7 +45,7 @@ use LambdaTwelve\OneRecord\Model\UuidIriMinter;
 use LambdaTwelve\OneRecord\Rdf\Iri;
 use LambdaTwelve\OneRecord\Server\ActionRequests;
 use LambdaTwelve\OneRecord\Server\DataHolder;
-use LambdaTwelve\OneRecord\Server\InMemory\InMemoryAccessPolicy;
+use LambdaTwelve\OneRecord\Server\GrantAccessPolicy;
 use LambdaTwelve\OneRecord\Server\InMemory\InMemoryState;
 use LambdaTwelve\OneRecord\Server\OneRecordServer;
 use LambdaTwelve\OneRecord\Server\ServerBuilder;
@@ -193,7 +193,7 @@ final class OneRecordServiceProvider extends ServiceProvider
             // internal-agent set lives in memory, and that comes from configuration.
             $policy = $this->driver() === 'array'
                 ? $app->make(InMemoryState::class)->policy
-                : new InMemoryAccessPolicy($app->make(AccessDelegationStore::class), $app->make(ClockInterface::class), $this->denial());
+                : new GrantAccessPolicy($app->make(AccessDelegationStore::class), $app->make(ClockInterface::class), $this->denial());
             $policy->addInternal($app->make(ServerConfig::class)->dataHolder);
             foreach ($this->arrayConfig('policy.internal_agents') as $agent) {
                 if (\is_string($agent) && $agent !== '') {

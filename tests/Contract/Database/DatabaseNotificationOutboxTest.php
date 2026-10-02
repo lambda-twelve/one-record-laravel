@@ -55,7 +55,7 @@ final class DatabaseNotificationOutboxTest extends DatabaseTestCase
 
     private function enqueueOne(string $created = '2026-10-02T12:00:00.000Z'): int
     {
-        $this->outbox()->enqueue(new OutboundNotification(new Iri('https://partner.example/logistics-objects/partner'), new Notification(NotificationEventType::LogisticsObjectCreated, Documents::iri('p1')), Documents::at($created)));
+        $this->outbox()->enqueue(new OutboundNotification(new Iri('https://partner.example/logistics-objects/partner'), new Notification(NotificationEventType::LogisticsObjectCreated, Documents::iri('p1')), Documents::at($created), 'n-' . $created));
         $ids = $this->databaseOutbox()->due(Documents::at('2099-01-01T00:00:00.000Z'), 100);
 
         return $ids[\count($ids) - 1];

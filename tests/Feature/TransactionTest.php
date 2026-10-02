@@ -17,7 +17,7 @@ use LambdaTwelve\OneRecord\Model\Builder\ObjectBuilder;
 use LambdaTwelve\OneRecord\Rdf\Iri;
 use LambdaTwelve\OneRecord\Server\DataHolder;
 use LambdaTwelve\OneRecord\Server\Event\ActionRequestCreated;
-use LambdaTwelve\OneRecord\Server\InMemory\InMemoryAccessPolicy;
+use LambdaTwelve\OneRecord\Server\GrantAccessPolicy;
 use LambdaTwelve\OneRecord\Server\ServerConfig;
 use LambdaTwelve\OneRecord\Server\Services;
 use LambdaTwelve\OneRecord\Server\Spi\AccessPolicy;
@@ -65,7 +65,7 @@ final class TransactionTest extends TestCase
         $holder = $this->app()->make(DataHolder::class);
         $holder->create(ObjectBuilder::of(Cargo::Piece)->set(Cargo::goodsDescription, 'Perishables')->build($iri));
         $policy = $this->app()->make(AccessPolicy::class);
-        self::assertInstanceOf(InMemoryAccessPolicy::class, $policy);
+        self::assertInstanceOf(GrantAccessPolicy::class, $policy);
         $policy->allow(new Iri(self::PARTNER), $iri, [Permission::GetLogisticsObject, Permission::PatchLogisticsObject]);
         $this->app()->make(Dispatcher::class)->listen(ActionRequestCreated::class, static function (): void {
             throw new RuntimeException('listener failed');

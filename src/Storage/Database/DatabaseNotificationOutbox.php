@@ -142,6 +142,7 @@ final class DatabaseNotificationOutbox implements NotificationOutbox
                 new Iri(Row::string($row, 'recipient')),
                 Notification::fromJsonLd(Row::string($row, 'document')),
                 Timestamps::fromDb($row['created_at']),
+                (string) Row::int($row, 'id'),
             ),
             Row::nullableString($row, 'endpoint'),
             Row::int($row, 'attempts'),
