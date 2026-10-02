@@ -20,6 +20,13 @@ final class DatabaseNotificationOutboxTest extends DatabaseTestCase
 {
     use NotificationOutboxContract;
 
+    protected function defineEnvironment($app): void
+    {
+        parent::defineEnvironment($app);
+        // This case is about the store; delivery jobs have their own test.
+        $app->make(\Illuminate\Contracts\Config\Repository::class)->set('one-record.outbox.dispatch', 'none');
+    }
+
     protected function outbox(): NotificationOutbox
     {
         return $this->app()->make(NotificationOutbox::class);

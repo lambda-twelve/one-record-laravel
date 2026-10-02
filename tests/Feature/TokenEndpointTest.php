@@ -8,6 +8,7 @@ use Illuminate\Contracts\Config\Repository;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Router;
+use Illuminate\Testing\PendingCommand;
 use Illuminate\Testing\TestResponse;
 use LambdaTwelve\OneRecord\Auth\ClientCredentialsVerifier;
 use LambdaTwelve\OneRecord\Laravel\Console\CreateClientCommand;
@@ -139,17 +140,21 @@ final class TokenEndpointTest extends TestCase
 
     public function testTheCommandRegistersAClientAndShowsTheSecretOnce(): void
     {
-        $this->artisan('one-record:client:create', ['agent' => self::PARTNER, '--name' => 'Partner One', '--client-id' => 'cli-1'])
-            ->expectsOutputToContain('cli-1')
-            ->assertSuccessful();
+        $command = $this->artisan('one-record:client:create', ['agent' => self::PARTNER, '--name' => 'Partner One', '--client-id' => 'cli-1']);
+        self::assertInstanceOf(PendingCommand::class, $command);
+        $command->expectsOutputToContain('cli-1')->assertSuccessful()->run();
 
         $row = $this->app()->make(ConnectionInterface::class)->table($this->app()->make(Tables::class)->clients())->where('client_id', 'cli-1')->first();
         self::assertNotNull($row);
         self::assertSame('Partner One', ((array) $row)['name']);
         self::assertSame(self::PARTNER, ((array) $row)['agent_iri']);
-        self::assertStringStartsWith('$2y$', (string) ((array) $row)['secret_hash']);
+        $hash = ((array) $row)['secret_hash'];
+        self::assertIsString($hash);
+        self::assertStringStartsWith('$2y$', $hash);
 
-        $this->artisan('one-record:client:create', ['agent' => 'not an iri'])->assertFailed();
+        $invalid = $this->artisan('one-record:client:create', ['agent' => 'not an iri']);
+        self::assertInstanceOf(PendingCommand::class, $invalid);
+        $invalid->assertFailed()->run();
     }
 
     /**

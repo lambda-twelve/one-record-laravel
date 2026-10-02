@@ -6,6 +6,7 @@ namespace LambdaTwelve\OneRecord\Laravel;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\HttpFactory;
+use Illuminate\Contracts\Bus\Dispatcher as BusDispatcher;
 use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Container\Container;
@@ -25,8 +26,12 @@ use LambdaTwelve\OneRecord\Laravel\Bridge\LaravelClock;
 use LambdaTwelve\OneRecord\Laravel\Bridge\LaravelEventDispatcher;
 use LambdaTwelve\OneRecord\Laravel\Config\ServerConfigFactory;
 use LambdaTwelve\OneRecord\Laravel\Console\CreateClientCommand;
+use LambdaTwelve\OneRecord\Laravel\Console\DeliverOutboxCommand;
+use LambdaTwelve\OneRecord\Laravel\Console\PruneOutboxCommand;
+use LambdaTwelve\OneRecord\Laravel\Console\RetryOutboxCommand;
 use LambdaTwelve\OneRecord\Laravel\Http\Controllers\ServerController;
 use LambdaTwelve\OneRecord\Laravel\Http\TransactionalRequestHandler;
+use LambdaTwelve\OneRecord\Laravel\Notifications\DeliverNotification;
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseAccessDelegationStore;
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseActionRequestStore;
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseClientCredentials;
@@ -105,7 +110,7 @@ final class OneRecordServiceProvider extends ServiceProvider
             OneRecord::tokenRoutes();
         }
         if ($this->app->runningInConsole()) {
-            $this->commands([CreateClientCommand::class]);
+            $this->commands([CreateClientCommand::class, DeliverOutboxCommand::class, PruneOutboxCommand::class, RetryOutboxCommand::class]);
         }
     }
 
@@ -175,7 +180,12 @@ final class OneRecordServiceProvider extends ServiceProvider
         $this->app->singleton(NotificationOutbox::class, fn(Container $app): NotificationOutbox => $this->store(
             $app,
             static fn(InMemoryState $s): NotificationOutbox => $s->outbox,
-            static fn(ConnectionInterface $db, Tables $t): NotificationOutbox => new DatabaseNotificationOutbox($db, $t),
+            fn(ConnectionInterface $db, Tables $t): NotificationOutbox => new DatabaseNotificationOutbox($db, $t, $this->config('outbox.dispatch', 'queue') === 'queue'
+                // The job is released only after the enqueuing transaction commits, so it never races the row.
+                ? static function (int $id) use ($app): void {
+                    $app->make(BusDispatcher::class)->dispatch(DeliverNotification::forRow($id, $app->make(Repository::class)));
+                }
+                : null),
         ));
 
         $this->app->singleton(AccessPolicy::class, function (Container $app): AccessPolicy {

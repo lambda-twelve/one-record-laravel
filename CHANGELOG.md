@@ -8,6 +8,11 @@ All notable changes to this package are documented here. The format follows
 
 ### Added
 
+- Notification delivery: a queued job that leases an outbox row, hands it to
+  the host's `NotificationDeliverer` and records the outcome with backoff and
+  a dead-letter state; `one-record:outbox:deliver`, `one-record:outbox:retry`
+  and `one-record:outbox:prune`; `NotificationDelivered` and
+  `NotificationDeliveryFailed` events.
 - Token issuing for this host's own partners: the SDK's client-credentials
   token endpoint on a configurable route, credentials stored hashed in the
   database, a JWKS route publishing the signing key, and
