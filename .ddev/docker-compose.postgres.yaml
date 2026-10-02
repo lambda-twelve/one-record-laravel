@@ -1,0 +1,23 @@
+# A PostgreSQL service next to DDEV's MariaDB so the store tests can run
+# against every database CI covers: "ddev test --db=pgsql".
+services:
+  postgres:
+    container_name: ddev-${DDEV_SITENAME}-postgres
+    image: postgres:16-alpine
+    restart: "no"
+    environment:
+      POSTGRES_USER: db
+      POSTGRES_PASSWORD: db
+      POSTGRES_DB: db
+    labels:
+      com.ddev.site-name: ${DDEV_SITENAME}
+      com.ddev.approot: $DDEV_APPROOT
+    volumes:
+      - "postgres:/var/lib/postgresql/data"
+      - ".:/mnt/ddev_config"
+  web:
+    depends_on:
+      - postgres
+volumes:
+  postgres:
+    name: "${DDEV_SITENAME}-postgres"

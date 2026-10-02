@@ -1,0 +1,21 @@
+# DDEV project for lambda-twelve/one-record-laravel.
+#
+# PHP 8.3 is pinned on purpose: it is the package's minimum version (and the
+# SDK's), so what runs locally is the oldest runtime we promise to support. CI
+# covers 8.4 and 8.5. MariaDB is here because the database stores must be
+# proven against a real unique-index/transaction implementation, not only
+# SQLite; PostgreSQL comes from docker-compose.postgres.yaml. The sibling SDK
+# checkout ../one-record is mounted by docker-compose.sdk.yaml so Composer's
+# relative path repository resolves inside the container too.
+name: one-record-laravel
+type: php
+docroot: ""
+php_version: "8.3"
+webserver_type: nginx-fpm
+xdebug_enabled: false
+database:
+  type: mariadb
+  version: "10.11"
+use_dns_when_possible: true
+composer_version: "2"
+corepack_enable: false

@@ -1,0 +1,100 @@
+{
+    "name": "lambda-twelve/one-record-laravel",
+    "description": "Laravel integration for lambda-twelve/one-record: service provider, routes, database stores, authentication wiring and a notification outbox for the IATA ONE Record SDK.",
+    "type": "library",
+    "license": "Apache-2.0",
+    "keywords": [
+        "iata",
+        "one-record",
+        "air-cargo",
+        "json-ld",
+        "logistics",
+        "laravel"
+    ],
+    "homepage": "https://github.com/lambda-twelve/one-record-laravel",
+    "authors": [
+        {
+            "name": "Nick Andriopoulos",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/lambda-twelve/one-record-laravel/issues",
+        "source": "https://github.com/lambda-twelve/one-record-laravel"
+    },
+    "require": {
+        "php": "^8.3",
+        "ext-json": "*",
+        "guzzlehttp/guzzle": "^7.9",
+        "guzzlehttp/psr7": "^2.7",
+        "illuminate/console": "^12.0 || ^13.0",
+        "illuminate/container": "^12.0 || ^13.0",
+        "illuminate/contracts": "^12.0 || ^13.0",
+        "illuminate/database": "^12.0 || ^13.0",
+        "illuminate/events": "^12.0 || ^13.0",
+        "illuminate/http": "^12.0 || ^13.0",
+        "illuminate/queue": "^12.0 || ^13.0",
+        "illuminate/routing": "^12.0 || ^13.0",
+        "illuminate/support": "^12.0 || ^13.0",
+        "lambda-twelve/one-record": "^1.0@dev",
+        "nesbot/carbon": "^3.0",
+        "psr/clock": "^1.0",
+        "psr/event-dispatcher": "^1.0",
+        "psr/http-client": "^1.0",
+        "psr/http-factory": "^1.1",
+        "psr/http-message": "^1.1 || ^2.0",
+        "psr/http-server-handler": "^1.0",
+        "psr/log": "^2.0 || ^3.0",
+        "psr/simple-cache": "^2.0 || ^3.0"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.75",
+        "orchestra/testbench": "^10.0 || ^11.0",
+        "phpstan/phpstan": "^2.1",
+        "phpstan/phpstan-phpunit": "^2.0",
+        "phpstan/phpstan-strict-rules": "^2.0",
+        "phpunit/phpunit": "^12.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "LambdaTwelve\\OneRecord\\Laravel\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "LambdaTwelve\\OneRecord\\Laravel\\Tests\\": "tests/",
+            "LambdaTwelve\\OneRecord\\Laravel\\Tools\\": "tools/"
+        }
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../one-record",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
+    "scripts": {
+        "test": "phpunit",
+        "phpstan": "phpstan analyse --memory-limit=1G",
+        "cs": "php-cs-fixer check --diff",
+        "cs:fix": "php-cs-fixer fix"
+    },
+    "config": {
+        "sort-packages": true,
+        "optimize-autoloader": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "extra": {
+        "branch-alias": {
+            "dev-main": "1.0.x-dev"
+        },
+        "laravel": {
+            "providers": [
+                "LambdaTwelve\\OneRecord\\Laravel\\OneRecordServiceProvider"
+            ]
+        }
+    }
+}

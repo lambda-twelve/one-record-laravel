@@ -1,0 +1,5 @@
+# Orchestra Testbench configuration for local experiments ("vendor/bin/testbench serve").
+providers:
+  - LambdaTwelve\OneRecord\Laravel\OneRecordServiceProvider
+migrations:
+  - database/migrations

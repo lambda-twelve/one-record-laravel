@@ -1,0 +1,13 @@
+lambda-twelve/one-record-laravel
+Copyright 2026 Lambda Twelve
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not
+use this software except in compliance with the License. A copy of the License
+is in the LICENSE file and at http://www.apache.org/licenses/LICENSE-2.0.
+
+This package integrates lambda-twelve/one-record, an implementation of the
+IATA ONE Record standard, into the Laravel framework. The ONE Record API
+specification, the ONE Record cargo ontology, the ONE Record API ontology and
+the ONE Record code lists are the work of the International Air Transport
+Association (IATA), published at https://github.com/IATA-Cargo/ONE-Record
+under the MIT License.

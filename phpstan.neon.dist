@@ -1,0 +1,24 @@
+includes:
+    - vendor/phpstan/phpstan-strict-rules/rules.neon
+    - vendor/phpstan/phpstan-phpunit/extension.neon
+    - vendor/phpstan/phpstan-phpunit/rules.neon
+
+parameters:
+    level: max
+    paths:
+        - src
+        - tests
+        - tools
+        - config
+        - database
+    excludePaths:
+        analyse:
+            # Deliberate violations, analysed only by tests/Unit/Tools/SdkInternalsRuleTest.
+            - tests/Fixtures/*
+    treatPhpDocTypesAsCertain: false
+    reportUnmatchedIgnoredErrors: true
+
+rules:
+    # The wrapper adapts the SDK's public surface; protocol logic stays in the SDK.
+    # src/ may not reach into the SDK's server internals (endpoints, HTTP helpers, router, change applier).
+    - LambdaTwelve\OneRecord\Laravel\Tools\PhpStan\SdkInternalsRule

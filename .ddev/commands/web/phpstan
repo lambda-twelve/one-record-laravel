@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+## Description: Run PHPStan at the configured level
+## Usage: phpstan [arguments]
+## Example: "ddev phpstan"
+set -euo pipefail
+exec vendor/bin/phpstan analyse --memory-limit=1G "$@"

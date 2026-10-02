@@ -1,0 +1,10 @@
+/vendor/
+composer.lock
+.phpunit.cache/
+.php-cs-fixer.cache
+/.cache/
+coverage.xml
+coverage.json
+# Local assistant/tooling files: never part of the repository.
+/CLAUDE.md
+/.claude/

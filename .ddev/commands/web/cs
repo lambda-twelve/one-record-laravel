@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+## Description: Check code style with php-cs-fixer ("cs fix" applies the fixes)
+## Usage: cs [fix] [arguments]
+## Example: "ddev cs", "ddev cs fix"
+set -euo pipefail
+if [ "${1:-}" = "fix" ]; then
+    shift
+    exec vendor/bin/php-cs-fixer fix "$@"
+fi
+exec vendor/bin/php-cs-fixer check --diff "$@"

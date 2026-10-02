@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+## Description: Run the PHPUnit suite; --db=sqlite|mariadb|pgsql picks the database (default sqlite)
+## Usage: test [--db=mariadb|pgsql] [phpunit arguments]
+## Example: "ddev test", "ddev test --db=pgsql --testsuite=contract"
+set -euo pipefail
+
+DB=sqlite
+ARGS=()
+for arg in "$@"; do
+    case "$arg" in
+        --db=*) DB="${arg#--db=}" ;;
+        *) ARGS+=("$arg") ;;
+    esac
+done
+
+case "$DB" in
+    sqlite)
+        export DB_CONNECTION=sqlite
+        ;;
+    mariadb)
+        export DB_CONNECTION=mariadb DB_HOST=db DB_PORT=3306 DB_DATABASE=db DB_USERNAME=db DB_PASSWORD=db
+        ;;
+    pgsql)
+        export DB_CONNECTION=pgsql DB_HOST=postgres DB_PORT=5432 DB_DATABASE=db DB_USERNAME=db DB_PASSWORD=db
+        ;;
+    *)
+        echo "Unknown database '$DB'; use sqlite, mariadb or pgsql." >&2
+        exit 2
+        ;;
+esac
+
+exec vendor/bin/phpunit "${ARGS[@]}"
