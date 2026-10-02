@@ -30,17 +30,17 @@ use LambdaTwelve\OneRecord\Vocabulary\Generated\Cargo;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 /**
- * Laravel request -> SDK server -> Laravel response, end to end on the SDK's
- * in-memory stores. Authentication is a trusted test header; the JWT path has
- * its own tests.
+ * Laravel request -> SDK server -> Laravel response, end to end, once on the
+ * SDK's in-memory stores and once on the database stores. Authentication is
+ * a trusted test header; the JWT path has its own tests.
  */
 #[CoversClass(ServerController::class)]
 #[CoversClass(PsrBridge::class)]
 #[CoversClass(LaravelEventDispatcher::class)]
 #[CoversClass(OneRecordServiceProvider::class)]
-final class ServerFlowTest extends TestCase
+abstract class ServerFlowTestCase extends TestCase
 {
-    private const string JSON_LD = 'application/ld+json; version=2.3.0';
+    protected const string JSON_LD = 'application/ld+json; version=2.3.0';
 
     protected function setUp(): void
     {
@@ -144,21 +144,21 @@ final class ServerFlowTest extends TestCase
         self::assertSame(self::HOLDER, $seen->createdBy?->value);
     }
 
-    private function publishPiece(string $id, string $description): Iri
+    protected function publishPiece(string $id, string $description): Iri
     {
         $stored = $this->app()->make(DataHolder::class)->create($this->piece($id, $description));
 
         return $stored->object->iri;
     }
 
-    private function piece(string $id, string $description): LogisticsObject
+    protected function piece(string $id, string $description): LogisticsObject
     {
         return ObjectBuilder::of(Cargo::Piece)
             ->set(Cargo::goodsDescription, $description)
             ->build($this->app()->make(ServerConfig::class)->logisticsObjectIri($id));
     }
 
-    private function policy(): InMemoryAccessPolicy
+    protected function policy(): InMemoryAccessPolicy
     {
         $policy = $this->app()->make(AccessPolicy::class);
         self::assertInstanceOf(InMemoryAccessPolicy::class, $policy);
@@ -169,7 +169,7 @@ final class ServerFlowTest extends TestCase
     /**
      * @param TestResponse<\Symfony\Component\HttpFoundation\Response> $response
      */
-    private static function body(TestResponse $response): string
+    protected static function body(TestResponse $response): string
     {
         $content = $response->baseResponse->getContent();
 
@@ -179,7 +179,7 @@ final class ServerFlowTest extends TestCase
     /**
      * @return TestResponse<\Symfony\Component\HttpFoundation\Response>
      */
-    private function request(string $method, string $path, ?string $agent, ?string $body = null): TestResponse
+    protected function request(string $method, string $path, ?string $agent, ?string $body = null): TestResponse
     {
         $server = ['HTTP_ACCEPT' => self::JSON_LD];
         if ($agent !== null) {

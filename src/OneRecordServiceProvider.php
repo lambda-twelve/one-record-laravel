@@ -10,6 +10,8 @@ use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Foundation\CachesRoutes;
+use Illuminate\Database\ConnectionInterface;
+use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Log\LogManager;
 use Illuminate\Support\ServiceProvider;
 use InvalidArgumentException;
@@ -18,6 +20,14 @@ use LambdaTwelve\OneRecord\Laravel\Bridge\LaravelClock;
 use LambdaTwelve\OneRecord\Laravel\Bridge\LaravelEventDispatcher;
 use LambdaTwelve\OneRecord\Laravel\Config\ServerConfigFactory;
 use LambdaTwelve\OneRecord\Laravel\Http\Controllers\ServerController;
+use LambdaTwelve\OneRecord\Laravel\Http\TransactionalRequestHandler;
+use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseAccessDelegationStore;
+use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseActionRequestStore;
+use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseLogisticsEventStore;
+use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseLogisticsObjectStore;
+use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseNotificationOutbox;
+use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseSubscriptionStore;
+use LambdaTwelve\OneRecord\Laravel\Storage\Database\Tables;
 use LambdaTwelve\OneRecord\Model\IriMinter;
 use LambdaTwelve\OneRecord\Model\UuidIriMinter;
 use LambdaTwelve\OneRecord\Rdf\Iri;
@@ -119,14 +129,43 @@ final class OneRecordServiceProvider extends ServiceProvider
      */
     private function registerStores(): void
     {
+        $this->app->singleton(Tables::class, function (): Tables {
+            $prefix = $this->config('storage.table_prefix', 'one_record_');
+
+            return new Tables(\is_string($prefix) ? $prefix : 'one_record_');
+        });
         $this->app->singleton(InMemoryState::class, fn(Container $app): InMemoryState => new InMemoryState($app->make(ClockInterface::class), $this->denial()));
 
-        $this->app->singleton(LogisticsObjectStore::class, fn(Container $app): LogisticsObjectStore => $this->store($app, static fn(InMemoryState $s): LogisticsObjectStore => $s->objects));
-        $this->app->singleton(LogisticsEventStore::class, fn(Container $app): LogisticsEventStore => $this->store($app, static fn(InMemoryState $s): LogisticsEventStore => $s->events));
-        $this->app->singleton(ActionRequestStore::class, fn(Container $app): ActionRequestStore => $this->store($app, static fn(InMemoryState $s): ActionRequestStore => $s->actionRequests));
-        $this->app->singleton(SubscriptionStore::class, fn(Container $app): SubscriptionStore => $this->store($app, static fn(InMemoryState $s): SubscriptionStore => $s->subscriptions));
-        $this->app->singleton(AccessDelegationStore::class, fn(Container $app): AccessDelegationStore => $this->store($app, static fn(InMemoryState $s): AccessDelegationStore => $s->delegations));
-        $this->app->singleton(NotificationOutbox::class, fn(Container $app): NotificationOutbox => $this->store($app, static fn(InMemoryState $s): NotificationOutbox => $s->outbox));
+        $this->app->singleton(LogisticsObjectStore::class, fn(Container $app): LogisticsObjectStore => $this->store(
+            $app,
+            static fn(InMemoryState $s): LogisticsObjectStore => $s->objects,
+            static fn(ConnectionInterface $db, Tables $t): LogisticsObjectStore => new DatabaseLogisticsObjectStore($db, $t),
+        ));
+        $this->app->singleton(LogisticsEventStore::class, fn(Container $app): LogisticsEventStore => $this->store(
+            $app,
+            static fn(InMemoryState $s): LogisticsEventStore => $s->events,
+            static fn(ConnectionInterface $db, Tables $t): LogisticsEventStore => new DatabaseLogisticsEventStore($db, $t),
+        ));
+        $this->app->singleton(ActionRequestStore::class, fn(Container $app): ActionRequestStore => $this->store(
+            $app,
+            static fn(InMemoryState $s): ActionRequestStore => $s->actionRequests,
+            static fn(ConnectionInterface $db, Tables $t): ActionRequestStore => new DatabaseActionRequestStore($db, $t),
+        ));
+        $this->app->singleton(SubscriptionStore::class, fn(Container $app): SubscriptionStore => $this->store(
+            $app,
+            static fn(InMemoryState $s): SubscriptionStore => $s->subscriptions,
+            static fn(ConnectionInterface $db, Tables $t): SubscriptionStore => new DatabaseSubscriptionStore($db, $t),
+        ));
+        $this->app->singleton(AccessDelegationStore::class, fn(Container $app): AccessDelegationStore => $this->store(
+            $app,
+            static fn(InMemoryState $s): AccessDelegationStore => $s->delegations,
+            static fn(ConnectionInterface $db, Tables $t): AccessDelegationStore => new DatabaseAccessDelegationStore($db, $t),
+        ));
+        $this->app->singleton(NotificationOutbox::class, fn(Container $app): NotificationOutbox => $this->store(
+            $app,
+            static fn(InMemoryState $s): NotificationOutbox => $s->outbox,
+            static fn(ConnectionInterface $db, Tables $t): NotificationOutbox => new DatabaseNotificationOutbox($db, $t),
+        ));
 
         $this->app->singleton(AccessPolicy::class, function (Container $app): AccessPolicy {
             // The SDK's grant-based policy works over any AccessDelegationStore; only the
@@ -193,19 +232,26 @@ final class OneRecordServiceProvider extends ServiceProvider
 
         $this->app->when(ServerController::class)
             ->needs(RequestHandlerInterface::class)
-            ->give(static fn(Container $app): RequestHandlerInterface => $app->make(OneRecordServer::class));
+            ->give(function (Container $app): RequestHandlerInterface {
+                $server = $app->make(OneRecordServer::class);
+
+                return $this->driver() === 'database' && (bool) $this->config('storage.transactions', true)
+                    ? new TransactionalRequestHandler($server, $this->connection($app))
+                    : $server;
+            });
     }
 
     /**
      * @template T of object
      * @param callable(InMemoryState): T $fromState
+     * @param callable(ConnectionInterface, Tables): T $fromDatabase
      * @return T
      */
-    private function store(Container $app, callable $fromState): object
+    private function store(Container $app, callable $fromState, callable $fromDatabase): object
     {
         return match ($this->driver()) {
             'array' => $fromState($app->make(InMemoryState::class)),
-            'database' => throw new LogicException('The database storage driver is not available yet; set one-record.storage.driver to "array".'),
+            'database' => $fromDatabase($this->connection($app), $app->make(Tables::class)),
             default => throw new InvalidArgumentException(\sprintf('Unknown one-record.storage.driver "%s"; use database or array.', $this->driver())),
         };
     }
@@ -228,6 +274,13 @@ final class OneRecordServiceProvider extends ServiceProvider
         }
 
         return $cache;
+    }
+
+    private function connection(Container $app): ConnectionInterface
+    {
+        $name = $this->config('storage.connection');
+
+        return $app->make(ConnectionResolverInterface::class)->connection(\is_string($name) && $name !== '' ? $name : null);
     }
 
     private function driver(): string

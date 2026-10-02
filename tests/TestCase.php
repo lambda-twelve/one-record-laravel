@@ -54,6 +54,7 @@ abstract class TestCase extends Testbench
                 'strict' => true,
             ]);
         }
+        $config->set('logging.default', 'null');
         $config->set('app.url', self::BASE);
         $config->set('one-record.server.base_url', self::BASE);
         $config->set('one-record.server.base_path', self::BASE_PATH);
