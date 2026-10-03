@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace LambdaTwelve\OneRecord\Laravel\Tests\Contract\Database;
 
-use LambdaTwelve\OneRecord\Api\Subscription;
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseSubscriptionStore;
 use LambdaTwelve\OneRecord\Laravel\Tests\Contract\DatabaseTestCase;
 use LambdaTwelve\OneRecord\Laravel\Tests\Contract\SubscriptionStoreContract;
@@ -25,12 +24,5 @@ final class DatabaseSubscriptionStoreTest extends DatabaseTestCase
     protected function subscriptions(): SubscriptionStore
     {
         return $this->app()->make(SubscriptionStore::class);
-    }
-
-    protected function offer(Subscription $subscription): void
-    {
-        $store = $this->subscriptions();
-        self::assertInstanceOf(DatabaseSubscriptionStore::class, $store);
-        $store->offer($subscription);
     }
 }

@@ -8,18 +8,20 @@ use LambdaTwelve\OneRecord\Api\Notification;
 use LambdaTwelve\OneRecord\Api\NotificationEventType;
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseNotificationOutbox;
 use LambdaTwelve\OneRecord\Laravel\Tests\Contract\DatabaseTestCase;
-use LambdaTwelve\OneRecord\Laravel\Tests\Contract\NotificationOutboxContract;
 use LambdaTwelve\OneRecord\Laravel\Tests\Support\Documents;
 use LambdaTwelve\OneRecord\Rdf\Iri;
 use LambdaTwelve\OneRecord\Server\Spi\NotificationOutbox;
 use LambdaTwelve\OneRecord\Server\Spi\OutboundNotification;
 use PHPUnit\Framework\Attributes\CoversClass;
 
+/**
+ * The host side of the outbox: due rows, leases, outcomes and pruning. What
+ * the SDK asks of every outbox is checked by its shipped contract in
+ * tests/Contract/Sdk.
+ */
 #[CoversClass(DatabaseNotificationOutbox::class)]
 final class DatabaseNotificationOutboxTest extends DatabaseTestCase
 {
-    use NotificationOutboxContract;
-
     protected function defineEnvironment($app): void
     {
         parent::defineEnvironment($app);
@@ -30,19 +32,6 @@ final class DatabaseNotificationOutboxTest extends DatabaseTestCase
     protected function outbox(): NotificationOutbox
     {
         return $this->app()->make(NotificationOutbox::class);
-    }
-
-    protected function enqueued(): array
-    {
-        $outbox = $this->databaseOutbox();
-        $out = [];
-        foreach ($outbox->due(Documents::at('2099-01-01T00:00:00.000Z'), 100) as $id) {
-            $pending = $outbox->find($id);
-            self::assertNotNull($pending);
-            $out[] = $pending->outbound;
-        }
-
-        return $out;
     }
 
     private function databaseOutbox(): DatabaseNotificationOutbox

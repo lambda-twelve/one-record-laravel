@@ -350,10 +350,11 @@ checkout (`composer config repositories.sdk path ../one-record`, then
 into the web container with a `.ddev/docker-compose.*.yaml` of your own;
 neither change belongs in a commit.
 
-The test suite drives the real SDK: contract tests run every store behaviour
-against the SDK's in-memory stores first (the reference) and then against the
-database stores, and the end-to-end flow runs on both drivers. CI does the
-same on PHP 8.3 to 8.5,
+The test suite drives the real SDK: the SDK's shipped store contracts
+(`LambdaTwelve\OneRecord\Testing\Contract`) run against the database stores,
+the host's own store tests run against the SDK's in-memory stores (the
+reference) and the database stores, and the end-to-end flow runs on both
+drivers. CI does the same on PHP 8.3 to 8.5,
 Laravel 12 and 13, lowest and highest dependencies, SQLite, MariaDB and
 PostgreSQL. See `CONTRIBUTING.md`.
 

@@ -16,16 +16,17 @@ use LambdaTwelve\OneRecord\Server\Spi\SubscriptionStore;
 use LambdaTwelve\OneRecord\Vocabulary\Generated\Cargo;
 
 /**
- * Subscribers are derived from accepted subscription requests; offers are
- * the host's own list. Both stores must share their storage.
+ * Beyond the SDK's shipped SubscriptionStoreContract (which runs against the
+ * database store in tests/Contract/Sdk): subscribers come back in request
+ * order, an empty type list keeps only identifier subscriptions, and a
+ * subscription expires at exactly its expiry instant. Run against the SDK's
+ * in-memory stores (the reference) and the database stores.
  */
 trait SubscriptionStoreContract
 {
     abstract protected function requests(): ActionRequestStore;
 
     abstract protected function subscriptions(): SubscriptionStore;
-
-    abstract protected function offer(Subscription $subscription): void;
 
     private function subscribe(string $id, string $subscriber, TopicType $topicType, string $topic, RequestStatus $status, ?string $expires = null): Iri
     {
@@ -62,16 +63,4 @@ trait SubscriptionStoreContract
         self::assertSame([$byId->value], array_map(static fn(array $s): string => $s['request']->value, $this->subscriptions()->subscribersOf(Documents::iri('p1'), [Cargo::Piece], Documents::at('2026-10-02T12:00:00.001Z'))), 'the type subscription expires at exactly its expiry instant');
     }
 
-    public function testOfferedSubscriptionsAreListedPerTopic(): void
-    {
-        $this->offer(new Subscription(new Iri(Documents::iri('holder')->value), TopicType::Type, Cargo::Piece, [SubscriptionEventType::LogisticsObjectCreated], description: 'all pieces'));
-        $this->offer(new Subscription(new Iri(Documents::iri('holder')->value), TopicType::Type, Cargo::Piece, [SubscriptionEventType::LogisticsEventReceived], description: 'piece events'));
-        $this->offer(new Subscription(new Iri(Documents::iri('holder')->value), TopicType::Identifier, Documents::iri('p1')->value, [SubscriptionEventType::LogisticsObjectUpdated]));
-
-        $pieces = $this->subscriptions()->offered(TopicType::Type, Cargo::Piece);
-        self::assertSame(['all pieces', 'piece events'], array_map(static fn(Subscription $s): ?string => $s->description, $pieces));
-        self::assertCount(1, $this->subscriptions()->offered(TopicType::Identifier, Documents::iri('p1')->value));
-        self::assertSame([], $this->subscriptions()->offered(TopicType::Identifier, Cargo::Piece));
-        self::assertSame([], $this->subscriptions()->offered(TopicType::Type, Cargo::Shipment));
-    }
 }

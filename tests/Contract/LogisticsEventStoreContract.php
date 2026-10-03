@@ -14,7 +14,10 @@ use LambdaTwelve\OneRecord\Server\Spi\LogisticsEventStore;
  * Filtering, sorting and paging exactly as the SDK's in-memory store does:
  * strict date bounds, events without an eventDate skipped by occurred
  * filters, created falling back to the receipt time, case-sensitive codes,
- * IRI as the tie-break.
+ * IRI as the tie-break. The SDK's shipped contract pins the basics and runs
+ * against the database store in tests/Contract/Sdk; this trait covers the
+ * finer points, against the in-memory store (the reference) and the database
+ * store.
  */
 trait LogisticsEventStoreContract
 {
@@ -122,12 +125,4 @@ trait LogisticsEventStoreContract
         self::assertSame(['e2'], $this->ids(new EventQuery(sort: EventQuery::SORT_EVENT_DESC, limit: 1)));
     }
 
-    public function testLastModifiedIsTheNewestReceiptTime(): void
-    {
-        self::assertNull($this->events()->lastModified(Documents::iri('p1')));
-        $this->seedEvents();
-
-        self::assertEquals(Documents::at('2026-10-02T10:10:00.000Z'), $this->events()->lastModified(Documents::iri('p1')));
-        self::assertEquals(Documents::at('2026-10-02T10:00:00.000Z'), $this->events()->lastModified(Documents::iri('p2')));
-    }
 }

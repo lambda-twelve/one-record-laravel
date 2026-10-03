@@ -13,9 +13,17 @@ All notable changes to this package are documented here. The format follows
   Applications must allow the pre-release themselves, since Composer reads
   stability flags from the root `composer.json` only:
   `composer require "lambda-twelve/one-record:^1.0@beta"`.
+- The SDK's shipped store contracts (`LambdaTwelve\OneRecord\Testing\Contract`)
+  run against the database stores, in `tests/Contract/Sdk`. The mirrored
+  object-store and outbox traits are gone; the remaining host traits keep
+  only the behaviour the SDK's contracts leave open.
 
 ### Fixed
 
+- Appending a logistics event whose IRI already exists raises the SDK's
+  `StoreException` (`ALREADY_EXISTS`) from the database store, as the SPI
+  requires, instead of letting the database's unique-index error escape. The
+  SDK's shipped `LogisticsEventStoreContract` caught it.
 - The database outbox stores the SDK's notification id in its own column
   (unique) and hands it back on read; it used to replace it with the row key,
   so the identity the server assigned, and the `Idempotency-Key` sent with the

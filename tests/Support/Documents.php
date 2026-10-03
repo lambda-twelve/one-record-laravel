@@ -47,7 +47,8 @@ final class Documents
     {
         $object = self::iri($objectId);
         $iri = new Iri($object->value . '/logistics-events/' . $eventId);
-        // Events are not logistics objects, so the checked builder refuses them; unchecked() still writes valid triples.
+        // The SDK's checked event builder (ObjectBuilder::ofEvent) insists on an eventDate; the store tests
+        // need events without one, so this writes the triples unchecked.
         $builder = ObjectBuilder::unchecked([Cargo::LogisticsEvent])->set(Cargo::eventName, 'Status ' . $eventId);
         if ($eventDate !== null) {
             $builder->set(Cargo::eventDate, self::at($eventDate));

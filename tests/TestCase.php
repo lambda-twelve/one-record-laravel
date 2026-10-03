@@ -7,6 +7,7 @@ namespace LambdaTwelve\OneRecord\Laravel\Tests;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Foundation\Application;
 use LambdaTwelve\OneRecord\Laravel\OneRecordServiceProvider;
+use LambdaTwelve\OneRecord\Laravel\Tests\Support\DatabaseConnection;
 use Orchestra\Testbench\TestCase as Testbench;
 
 /**
@@ -36,24 +37,8 @@ abstract class TestCase extends Testbench
     protected function defineEnvironment($app): void
     {
         $config = $app->make(Repository::class);
-        $connection = self::env('DB_CONNECTION', 'sqlite');
-        $config->set('database.default', $connection);
-        if ($connection === 'sqlite') {
-            $config->set('database.connections.sqlite', ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '', 'foreign_key_constraints' => true]);
-        } else {
-            $config->set('database.connections.' . $connection, [
-                'driver' => $connection,
-                'host' => self::env('DB_HOST', '127.0.0.1'),
-                'port' => self::env('DB_PORT', $connection === 'pgsql' ? '5432' : '3306'),
-                'database' => self::env('DB_DATABASE', 'db'),
-                'username' => self::env('DB_USERNAME', 'db'),
-                'password' => self::env('DB_PASSWORD', 'db'),
-                'charset' => $connection === 'pgsql' ? 'utf8' : 'utf8mb4',
-                'collation' => $connection === 'pgsql' ? null : 'utf8mb4_unicode_ci',
-                'prefix' => '',
-                'strict' => true,
-            ]);
-        }
+        $config->set('database.default', DatabaseConnection::name());
+        $config->set('database.connections.' . DatabaseConnection::name(), DatabaseConnection::config());
         $config->set('logging.default', 'null');
         $config->set('app.url', self::BASE);
         $config->set('one-record.server.base_url', self::BASE);
@@ -84,12 +69,5 @@ abstract class TestCase extends Testbench
     protected function storageDriver(): string
     {
         return 'array';
-    }
-
-    private static function env(string $name, string $default): string
-    {
-        $value = getenv($name);
-
-        return \is_string($value) && $value !== '' ? $value : $default;
     }
 }

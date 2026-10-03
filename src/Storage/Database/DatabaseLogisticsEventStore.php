@@ -7,6 +7,7 @@ namespace LambdaTwelve\OneRecord\Laravel\Storage\Database;
 use DateTimeImmutable;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Database\UniqueConstraintViolationException;
 use LambdaTwelve\OneRecord\JsonLd\Json;
 use LambdaTwelve\OneRecord\JsonLd\JsonLd;
 use LambdaTwelve\OneRecord\Laravel\Support\IriHash;
@@ -15,6 +16,7 @@ use LambdaTwelve\OneRecord\Model\LogisticsEvent;
 use LambdaTwelve\OneRecord\Rdf\Iri;
 use LambdaTwelve\OneRecord\Server\Spi\EventQuery;
 use LambdaTwelve\OneRecord\Server\Spi\LogisticsEventStore;
+use LambdaTwelve\OneRecord\Server\Spi\StoreException;
 
 /**
  * Append-only events, the JSON-LD plus the columns the spec's filters need
@@ -23,32 +25,46 @@ use LambdaTwelve\OneRecord\Server\Spi\LogisticsEventStore;
  * without an eventDate excluded by occurred filters, created falls back to
  * the receipt time). Event codes are matched in PHP by the SDK's own
  * matchesCode(), after a LIKE pre-filter narrows the rows, because that
- * match is case-sensitive and LIKE is not everywhere.
- *
- * Two deliberate differences from the in-memory store: appending an event
- * IRI twice fails (events are immutable) and lastModified() is the newest
- * event rather than the last appended one.
+ * match is case-sensitive and LIKE is not everywhere. As in the reference
+ * store, an event IRI is appended once and lastModified() is the newest
+ * event, not the last appended one.
  */
 final class DatabaseLogisticsEventStore implements LogisticsEventStore
 {
+    use Transactions;
+
     public function __construct(
         private readonly ConnectionInterface $db,
         private readonly Tables $tables,
     ) {}
 
+    protected function connection(): ConnectionInterface
+    {
+        return $this->db;
+    }
+
     public function append(LogisticsEvent $event): void
     {
-        $this->db->table($this->tables->events())->insert([
-            'iri_hash' => IriHash::of($event->iri),
-            'iri' => $event->iri->value,
-            'logistics_object_hash' => IriHash::of($event->logisticsObject),
-            'logistics_object_iri' => $event->logisticsObject->value,
-            'event_code' => $event->eventCode(),
-            'event_date' => Timestamps::toDb($event->eventDate()),
-            'creation_date' => Timestamps::toDb($event->creationDate()),
-            'created_at' => Timestamps::toDb($event->created),
-            'document' => Json::encode($event->toJsonLd(), false),
-        ]);
+        // The unique index on the IRI is the check (AR-022: one IRI on the whole server, whichever
+        // object it is filed under); the savepoint keeps a refused insert from poisoning PostgreSQL's
+        // enclosing request transaction.
+        $this->transaction(function () use ($event): void {
+            try {
+                $this->db->table($this->tables->events())->insert([
+                    'iri_hash' => IriHash::of($event->iri),
+                    'iri' => $event->iri->value,
+                    'logistics_object_hash' => IriHash::of($event->logisticsObject),
+                    'logistics_object_iri' => $event->logisticsObject->value,
+                    'event_code' => $event->eventCode(),
+                    'event_date' => Timestamps::toDb($event->eventDate()),
+                    'creation_date' => Timestamps::toDb($event->creationDate()),
+                    'created_at' => Timestamps::toDb($event->created),
+                    'document' => Json::encode($event->toJsonLd(), false),
+                ]);
+            } catch (UniqueConstraintViolationException) {
+                throw StoreException::alreadyExists($event->iri);
+            }
+        });
     }
 
     public function get(Iri $eventIri): ?LogisticsEvent

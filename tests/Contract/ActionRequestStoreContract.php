@@ -22,6 +22,14 @@ use LambdaTwelve\OneRecord\Server\Spi\ActionRequestStore;
 use LambdaTwelve\OneRecord\Server\Spi\AuditTrailQuery;
 use LambdaTwelve\OneRecord\Vocabulary\Generated\Cargo;
 
+/**
+ * Host behaviour the SDK's shipped ActionRequestStoreContract leaves open:
+ * the whole status history and every payload's details after a round trip,
+ * inclusive audit-trail bounds on the last modification, and the IRI as the
+ * tie-break on equal timestamps. Run against the SDK's in-memory store (the
+ * reference) and the database store; the SDK's own contract runs against the
+ * database store in tests/Contract/Sdk.
+ */
 trait ActionRequestStoreContract
 {
     abstract protected function requests(): ActionRequestStore;
@@ -101,18 +109,6 @@ trait ActionRequestStoreContract
         self::assertNull($this->requests()->get($this->requestIri('missing')));
     }
 
-    public function testSavingAgainReplacesTheRequest(): void
-    {
-        $t0 = Documents::at('2026-10-02T10:00:00.000Z');
-        $request = ActionRequest::create($this->requestIri('c1'), $this->change('p1'), new Iri(Documents::PARTNER), $t0);
-        $this->requests()->save($request);
-        $this->requests()->save($request->withStatus(RequestStatus::Accepted, $t0->modify('+5 minutes')));
-
-        $read = $this->requests()->get($this->requestIri('c1'));
-        self::assertSame(RequestStatus::Accepted, $read?->status);
-        self::assertEquals($t0->modify('+5 minutes'), $read->statusSince);
-        self::assertCount(1, $this->requests()->auditTrail(Documents::iri('p1'), AuditTrailQuery::all()));
-    }
 
     private function seedTrail(): void
     {
@@ -134,13 +130,6 @@ trait ActionRequestStoreContract
         return array_map(static fn(ActionRequest $r): string => basename($r->iri->value), $this->requests()->auditTrail(Documents::iri('p1'), $query));
     }
 
-    public function testTheAuditTrailListsChangesAndVerificationsOldestFirst(): void
-    {
-        $this->seedTrail();
-
-        self::assertSame(['c1', 'v1', 'c2'], $this->trail(AuditTrailQuery::all()));
-        self::assertSame([], $this->requests()->auditTrail(Documents::iri('p3'), AuditTrailQuery::all()));
-    }
 
     public function testAuditTrailBoundsAreInclusiveOnTheLastModification(): void
     {
@@ -154,15 +143,6 @@ trait ActionRequestStoreContract
         self::assertSame(['c2'], $this->trail(new AuditTrailQuery(status: RequestStatus::Rejected)));
     }
 
-    public function testPendingChangesAreOnlyPendingChangeRequests(): void
-    {
-        $this->seedTrail();
-
-        $pending = $this->requests()->pendingChanges(Documents::iri('p1'));
-        self::assertCount(1, $pending);
-        self::assertSame($this->requestIri('c1')->value, $pending[0]->iri->value);
-        self::assertSame([], $this->requests()->pendingChanges(Documents::iri('p3')));
-    }
 
     public function testRequestsWithTheSameTimestampOrderByIri(): void
     {

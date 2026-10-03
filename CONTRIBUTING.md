@@ -12,9 +12,11 @@ Thank you for helping make ONE Record a natural Laravel citizen.
   `src/` never reaches into the SDK's server internals.
 - **The SDK's model stays the SDK's model.** Stores persist the SDK's value
   objects; no Eloquent models wrap them.
-- **Tests first.** Store changes come with contract tests that run against
-  both the SDK's in-memory store and the database store. Integration behaviour
-  is proven through the real SDK, not mocks. PHPStan stays clean at level max
+- **Tests first.** The SDK's shipped store contracts
+  (`LambdaTwelve\OneRecord\Testing\Contract`) run against the database stores
+  in `tests/Contract/Sdk`; host behaviour beyond them is tested against both
+  the SDK's in-memory store and the database store. Integration behaviour is
+  proven through the real SDK, not mocks. PHPStan stays clean at level max
   without a baseline.
 
 ## Working locally

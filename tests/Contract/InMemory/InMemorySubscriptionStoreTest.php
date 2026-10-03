@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace LambdaTwelve\OneRecord\Laravel\Tests\Contract\InMemory;
 
-use LambdaTwelve\OneRecord\Api\Subscription;
 use LambdaTwelve\OneRecord\Laravel\Tests\Contract\SubscriptionStoreContract;
 use LambdaTwelve\OneRecord\Server\InMemory\InMemoryActionRequestStore;
 use LambdaTwelve\OneRecord\Server\InMemory\InMemorySubscriptionStore;
@@ -32,12 +31,5 @@ final class InMemorySubscriptionStoreTest extends TestCase
         \assert($requests instanceof InMemoryActionRequestStore);
 
         return $this->subscriptions ??= new InMemorySubscriptionStore($requests);
-    }
-
-    protected function offer(Subscription $subscription): void
-    {
-        $store = $this->subscriptions();
-        \assert($store instanceof InMemorySubscriptionStore);
-        $store->offer($subscription);
     }
 }

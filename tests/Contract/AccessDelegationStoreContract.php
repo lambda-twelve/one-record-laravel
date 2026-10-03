@@ -10,6 +10,12 @@ use LambdaTwelve\OneRecord\Rdf\Iri;
 use LambdaTwelve\OneRecord\Server\Spi\AccessDelegationStore;
 use LambdaTwelve\OneRecord\Server\Spi\Grant;
 
+/**
+ * Beyond the SDK's shipped AccessDelegationStoreContract (which runs against
+ * the database store in tests/Contract/Sdk): grants come back in the order
+ * they were made, with every detail intact. Run against the SDK's in-memory
+ * store (the reference) and the database store.
+ */
 trait AccessDelegationStoreContract
 {
     abstract protected function delegations(): AccessDelegationStore;
@@ -44,26 +50,4 @@ trait AccessDelegationStoreContract
         self::assertSame([], $this->delegations()->grantsFor(new Iri('https://nobody.example/x'), Documents::iri('p1')));
     }
 
-    public function testRevokingADelegationRemovesOnlyTheGrantsItMade(): void
-    {
-        $partner = new Iri(Documents::PARTNER);
-        $source = new Iri(Documents::BASE . '/action-requests/d1');
-        $otherSource = new Iri(Documents::BASE . '/action-requests/d2');
-        $this->delegations()->grant(new Grant($partner, Documents::iri('p1'), [Permission::GetLogisticsObject]));
-        $this->delegations()->grant(new Grant($partner, Documents::iri('p1'), [Permission::PatchLogisticsObject], null, $source));
-        $this->delegations()->grant(new Grant($partner, Documents::iri('p2'), [Permission::GetLogisticsObject], null, $source));
-        $this->delegations()->grant(new Grant($partner, Documents::iri('p2'), [Permission::GetLogisticsEvent], null, $otherSource));
-
-        $this->delegations()->revokeFrom($source);
-
-        $p1 = $this->delegations()->grantsFor($partner, Documents::iri('p1'));
-        self::assertCount(1, $p1);
-        self::assertNull($p1[0]->source);
-        $p2 = $this->delegations()->grantsFor($partner, Documents::iri('p2'));
-        self::assertCount(1, $p2);
-        self::assertSame($otherSource->value, $p2[0]->source?->value);
-
-        $this->delegations()->revokeFrom(new Iri(Documents::BASE . '/action-requests/unknown'));
-        self::assertCount(1, $this->delegations()->grantsFor($partner, Documents::iri('p1')));
-    }
 }
