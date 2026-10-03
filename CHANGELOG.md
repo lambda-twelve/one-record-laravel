@@ -6,6 +6,14 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The database outbox stores the SDK's notification id in its own column
+  (unique) and hands it back on read; it used to replace it with the row key,
+  so the identity the server assigned, and the `Idempotency-Key` sent with the
+  notification, was lost. The outbox contract test now asserts the ids and
+  that reads are snapshots, as the SDK's shipped contract does.
+
 ### Added
 
 - Notification delivery: a queued job that leases an outbox row, hands it to

@@ -130,6 +130,9 @@ return new class extends Migration {
 
         $schema->create($tables->outbox(), static function (Blueprint $table) use ($p): void {
             $table->id();
+            // The SDK's own notification id, kept apart from the row key so the identity the
+            // server assigned (and the Idempotency-Key it becomes) survives storage.
+            $table->string('notification_id', 191);
             $table->char('recipient_hash', 64);
             $table->text('recipient');
             $table->text('endpoint')->nullable();
@@ -145,6 +148,7 @@ return new class extends Migration {
             $table->text('last_error')->nullable();
             $table->index(['delivered_at', 'failed_at', 'next_attempt_at'], $p . 'outbox_due_idx');
             $table->index('recipient_hash', $p . 'outbox_recipient_idx');
+            $table->unique('notification_id', $p . 'outbox_notification_unique');
         });
 
         $schema->create($tables->clients(), static function (Blueprint $table) use ($p): void {

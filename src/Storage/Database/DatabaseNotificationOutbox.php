@@ -37,6 +37,7 @@ final class DatabaseNotificationOutbox implements NotificationOutbox
     public function enqueue(OutboundNotification $notification): void
     {
         $id = $this->db->table($this->tables->outbox())->insertGetId([
+            'notification_id' => $notification->id,
             'recipient_hash' => IriHash::of($notification->recipient),
             'recipient' => $notification->recipient->value,
             'endpoint' => $notification->suggestedEndpoint(),
@@ -142,7 +143,8 @@ final class DatabaseNotificationOutbox implements NotificationOutbox
                 new Iri(Row::string($row, 'recipient')),
                 Notification::fromJsonLd(Row::string($row, 'document')),
                 Timestamps::fromDb($row['created_at']),
-                (string) Row::int($row, 'id'),
+                // The identity the SDK assigned, not the row key (R4-003).
+                Row::string($row, 'notification_id'),
             ),
             Row::nullableString($row, 'endpoint'),
             Row::int($row, 'attempts'),

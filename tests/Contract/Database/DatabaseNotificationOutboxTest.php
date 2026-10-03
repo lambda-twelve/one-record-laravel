@@ -53,9 +53,12 @@ final class DatabaseNotificationOutboxTest extends DatabaseTestCase
         return $outbox;
     }
 
+    private int $sequence = 0;
+
     private function enqueueOne(string $created = '2026-10-02T12:00:00.000Z'): int
     {
-        $this->outbox()->enqueue(new OutboundNotification(new Iri('https://partner.example/logistics-objects/partner'), new Notification(NotificationEventType::LogisticsObjectCreated, Documents::iri('p1')), Documents::at($created), 'n-' . $created));
+        // Every notification has its own id, as the SDK's generator guarantees; the table enforces it.
+        $this->outbox()->enqueue(new OutboundNotification(new Iri('https://partner.example/logistics-objects/partner'), new Notification(NotificationEventType::LogisticsObjectCreated, Documents::iri('p1')), Documents::at($created), 'n-' . ++$this->sequence));
         $ids = $this->databaseOutbox()->due(Documents::at('2099-01-01T00:00:00.000Z'), 100);
 
         return $ids[\count($ids) - 1];
