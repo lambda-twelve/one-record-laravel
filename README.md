@@ -3,8 +3,9 @@
 Laravel integration for [`lambda-twelve/one-record`](https://github.com/lambda-twelve/one-record),
 the framework-agnostic PHP implementation of **IATA ONE Record**.
 
-> **Status:** under construction alongside the SDK. Nothing is released yet;
-> the SDK itself is heading for `1.0.0-beta1`.
+> **Status:** pre-release. The package follows the SDK's `1.0.0-beta1` on
+> Packagist; it is not tagged itself yet, so until then install it from this
+> repository.
 
 ## What this package is
 
@@ -50,9 +51,20 @@ PSR-7.
 composer require lambda-twelve/one-record-laravel
 ```
 
-Until the SDK is on Packagist, add both repositories to your application's
-`composer.json` (a VCS repository for the SDK, or a path repository if you
-work from a local checkout) and require `lambda-twelve/one-record:^1.0@dev`.
+The SDK is a pre-release on Packagist, and Composer only honours a stability
+flag written in the root `composer.json`, so allow it for that one package
+rather than lowering your application's minimum stability:
+
+```sh
+composer require "lambda-twelve/one-record:^1.0@beta" lambda-twelve/one-record-laravel
+```
+
+Until this package is tagged, add its repository as well:
+
+```sh
+composer config repositories.one-record-laravel vcs https://github.com/lambda-twelve/one-record-laravel
+composer require "lambda-twelve/one-record:^1.0@beta" "lambda-twelve/one-record-laravel:dev-main"
+```
 
 The service provider is auto-discovered. Publish the configuration and, if you
 want to adapt them, the migrations:
@@ -317,12 +329,10 @@ Type-hint `Services`, `OneRecordServer`, `DataHolder`, `ActionRequests` or
 
 ## Local development
 
-The project uses [DDEV](https://ddev.com); no host PHP is needed. The SDK is
-consumed from the sibling checkout `../one-record` through a relative Composer
-path repository, so clone both repositories next to each other:
+The project uses [DDEV](https://ddev.com); no host PHP is needed. The SDK
+comes from Packagist like any other dependency:
 
 ```sh
-git clone git@github.com:lambda-twelve/one-record.git
 git clone git@github.com:lambda-twelve/one-record-laravel.git
 cd one-record-laravel
 ddev start
@@ -334,10 +344,16 @@ ddev phpstan               # level max, strict rules
 ddev cs                    # php-cs-fixer (ddev cs fix to apply)
 ```
 
-Changes in `../one-record` are visible immediately. The test suite drives the
-real SDK: contract tests run every store behaviour against the SDK's in-memory
-stores first (the reference) and then against the database stores, and the
-end-to-end flow runs on both drivers. CI does the same on PHP 8.3 to 8.5,
+To work against an unreleased SDK, point a path repository at a sibling
+checkout (`composer config repositories.sdk path ../one-record`, then
+`composer require "lambda-twelve/one-record:@dev"`) and mount that checkout
+into the web container with a `.ddev/docker-compose.*.yaml` of your own;
+neither change belongs in a commit.
+
+The test suite drives the real SDK: contract tests run every store behaviour
+against the SDK's in-memory stores first (the reference) and then against the
+database stores, and the end-to-end flow runs on both drivers. CI does the
+same on PHP 8.3 to 8.5,
 Laravel 12 and 13, lowest and highest dependencies, SQLite, MariaDB and
 PostgreSQL. See `CONTRIBUTING.md`.
 

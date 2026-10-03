@@ -1,7 +1,0 @@
-# Mount the sibling SDK working tree so composer.json's path repository
-# ("../one-record", relative to the project root at /var/www/html) resolves
-# inside the web container exactly as it does on the host.
-services:
-  web:
-    volumes:
-      - "../../one-record:/var/www/one-record:cached"

@@ -6,6 +6,14 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The SDK is required from Packagist as `lambda-twelve/one-record:^1.0@beta`.
+  The path repository, the sibling checkout in CI and the DDEV mount are gone.
+  Applications must allow the pre-release themselves, since Composer reads
+  stability flags from the root `composer.json` only:
+  `composer require "lambda-twelve/one-record:^1.0@beta"`.
+
 ### Fixed
 
 - The database outbox stores the SDK's notification id in its own column

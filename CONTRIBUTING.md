@@ -19,9 +19,9 @@ Thank you for helping make ONE Record a natural Laravel citizen.
 
 ## Working locally
 
-The project uses [DDEV](https://ddev.com) so no host PHP is needed. The SDK is
-consumed from the sibling checkout `../one-record` through a Composer path
-repository, so clone both repositories next to each other.
+The project uses [DDEV](https://ddev.com) so no host PHP is needed. The SDK
+comes from Packagist; the README says how to work against a local checkout
+instead.
 
 ```sh
 ddev start
