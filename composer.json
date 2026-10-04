@@ -36,7 +36,7 @@
         "illuminate/queue": "^12.0 || ^13.0",
         "illuminate/routing": "^12.0 || ^13.0",
         "illuminate/support": "^12.0 || ^13.0",
-        "lambda-twelve/one-record": "^1.0.0-beta2",
+        "lambda-twelve/one-record": "^1.0.0-beta3",
         "nesbot/carbon": "^3.0",
         "psr/clock": "^1.0",
         "psr/event-dispatcher": "^1.0",

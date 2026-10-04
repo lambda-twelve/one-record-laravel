@@ -8,17 +8,21 @@ All notable changes to this package are documented here. The format follows
 
 ### Changed
 
-- The SDK is required from Packagist as `lambda-twelve/one-record:^1.0.0-beta2`.
+- The SDK is required from Packagist as `lambda-twelve/one-record:^1.0.0-beta3`.
   The path repository, the sibling checkout in CI and the DDEV mount are gone.
   Applications must allow the pre-release themselves, since Composer reads
   stability flags from the root `composer.json` only:
-  `composer require "lambda-twelve/one-record:^1.0.0-beta2"`.
+  `composer require "lambda-twelve/one-record:^1.0.0-beta3"`. beta3 carries
+  what this package's integration asked of the SDK: every action-request
+  decision is a compare-and-set before any side effect, `Services` warns when
+  persistent stores come without a unit of work (the provider always binds
+  one), and the contract traits' constants are prefixed.
 - The SDK's shipped store contracts run against the database stores as the
-  provider wires them: beta2 ships them as traits
-  (`LambdaTwelve\OneRecord\Testing\Contract\*ContractTests`), used inside
-  Testbench in `tests/Contract/Sdk`. The mirrored object-store and outbox
-  traits are gone; the remaining host traits keep only the behaviour the
-  SDK's contracts leave open.
+  provider wires them, as the traits
+  (`LambdaTwelve\OneRecord\Testing\Contract\*ContractTests`) on the package's
+  own Testbench base in `tests/Contract/Sdk`. The mirrored object-store and
+  outbox traits are gone; the remaining host traits keep only the behaviour
+  the SDK's contracts leave open.
 - The SDK's `UnitOfWork` is bound to the storage connection
   (`DatabaseUnitOfWork`), so every mutating request and every `DataHolder` /
   `ActionRequests` operation is one transaction and nested calls are

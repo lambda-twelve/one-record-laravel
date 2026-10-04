@@ -73,10 +73,14 @@ final class AdversarialReviewTest extends TestCase
     }
 
     /**
-     * Finding 1. Accepting an access delegation writes its grants before the
-     * final status update; when that update loses to a competing decision the
-     * SDK answers 409. Without the unit of work the grants stayed committed
-     * behind the 409 and the policy allowed the partner in.
+     * Finding 1. Accepting an access delegation used to write its grants
+     * before the final status update; when that update lost to a competing
+     * decision the SDK answered 409, and without the unit of work the grants
+     * stayed committed behind the 409 and the policy allowed the partner in.
+     * Two things now stand between that and a partner: the unit of work bound
+     * here, and, since SDK beta3, the compare-and-set on the status coming
+     * before any side effect, so a lost decision writes nothing even without
+     * a transaction.
      *
      * The competing decision is injected on the second read of the request
      * (the one accept() takes before deciding). It runs on the same connection

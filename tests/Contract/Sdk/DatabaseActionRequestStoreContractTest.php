@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace LambdaTwelve\OneRecord\Laravel\Tests\Contract\Sdk;
 
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseActionRequestStore;
+use LambdaTwelve\OneRecord\Laravel\Tests\Contract\DatabaseTestCase;
 use LambdaTwelve\OneRecord\Server\Spi\ActionRequestStore;
 use LambdaTwelve\OneRecord\Testing\Contract\ActionRequestStoreContractTests;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 #[CoversClass(DatabaseActionRequestStore::class)]
-final class DatabaseActionRequestStoreContractTest extends SdkContractTestCase
+final class DatabaseActionRequestStoreContractTest extends DatabaseTestCase
 {
     use ActionRequestStoreContractTests;
 

@@ -13,6 +13,8 @@ use LambdaTwelve\OneRecord\Auth\JwtAuthenticator;
 use LambdaTwelve\OneRecord\Laravel\Bridge\LaravelClock;
 use LambdaTwelve\OneRecord\Laravel\Bridge\LaravelEventDispatcher;
 use LambdaTwelve\OneRecord\Laravel\OneRecordServiceProvider;
+use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseUnitOfWork;
+use LambdaTwelve\OneRecord\Laravel\Tests\Support\TestLogger;
 use LambdaTwelve\OneRecord\Laravel\Tests\TestCase;
 use LambdaTwelve\OneRecord\Model\IriMinter;
 use LambdaTwelve\OneRecord\Model\UuidIriMinter;
@@ -36,6 +38,7 @@ use LambdaTwelve\OneRecord\Server\Spi\LogisticsEventStore;
 use LambdaTwelve\OneRecord\Server\Spi\LogisticsObjectStore;
 use LambdaTwelve\OneRecord\Server\Spi\NotificationOutbox;
 use LambdaTwelve\OneRecord\Server\Spi\SubscriptionStore;
+use LambdaTwelve\OneRecord\Server\Spi\UnitOfWork;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Psr\Clock\ClockInterface;
@@ -78,6 +81,23 @@ final class ServiceProviderTest extends TestCase
         foreach ([LogisticsEventStore::class, ActionRequestStore::class, SubscriptionStore::class, AccessDelegationStore::class] as $spi) {
             self::assertInstanceOf($spi, $this->app()->make($spi));
         }
+    }
+
+    /**
+     * Since beta3 the SDK warns when persistent stores come without a unit of
+     * work; with the database driver the provider binds one, so it does not.
+     */
+    public function testTheDatabaseDriverBindsTheUnitOfWorkSoTheSdkDoesNotWarn(): void
+    {
+        $this->config()->set('one-record.storage.driver', 'database');
+        $logger = new TestLogger();
+        $this->app()->instance(OneRecordServiceProvider::LOGGER, $logger);
+
+        $services = $this->app()->make(Services::class);
+
+        self::assertInstanceOf(DatabaseUnitOfWork::class, $this->app()->make(UnitOfWork::class));
+        self::assertSame($this->app()->make(UnitOfWork::class), $services->unitOfWork);
+        self::assertSame([], $logger->records, 'no "operations will not be atomic" warning');
     }
 
     public function testFrameworkServicesAreBoundForTheSdk(): void

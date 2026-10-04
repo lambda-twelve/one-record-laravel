@@ -7,12 +7,13 @@ namespace LambdaTwelve\OneRecord\Laravel\Tests\Contract\Sdk;
 use DateTimeImmutable;
 use Illuminate\Contracts\Config\Repository;
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseNotificationOutbox;
+use LambdaTwelve\OneRecord\Laravel\Tests\Contract\DatabaseTestCase;
 use LambdaTwelve\OneRecord\Server\Spi\NotificationOutbox;
 use LambdaTwelve\OneRecord\Testing\Contract\NotificationOutboxContractTests;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 #[CoversClass(DatabaseNotificationOutbox::class)]
-final class DatabaseNotificationOutboxContractTest extends SdkContractTestCase
+final class DatabaseNotificationOutboxContractTest extends DatabaseTestCase
 {
     use NotificationOutboxContractTests;
 
