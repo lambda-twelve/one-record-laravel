@@ -6,6 +6,19 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.0.0-beta2] - 2026-10-05
+
+The Laravel host for `lambda-twelve/one-record` 1.0.0-beta6. Since beta1:
+the package installs into a current Laravel application again (Guzzle 8),
+the SDK's unit of work, decision ordering, delivery verdict and wiring checks
+are followed through to `php artisan about`, the database request store keeps
+every query column in step with the stored request, and four more adversarial
+review rounds (6 to 9) are folded in with their probes kept as tests. A
+consumer smoke installs the package into a fresh application in CI. Public
+API changes remain possible between betas and are recorded here.
+
 ### Changed
 
 - The SDK is required as `lambda-twelve/one-record:^1.0.0-beta6`. beta4 and

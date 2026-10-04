@@ -3,9 +3,8 @@
 Laravel integration for [`lambda-twelve/one-record`](https://github.com/lambda-twelve/one-record),
 the framework-agnostic PHP implementation of **IATA ONE Record**.
 
-> **Status:** pre-release. `1.0.0-beta1` follows the SDK's `1.0.0-beta3`; the
-> main branch follows `1.0.0-beta6`. The public API may still change between
-> betas; `CHANGELOG.md` records it.
+> **Status:** pre-release, `1.0.0-beta2`, following the SDK's `1.0.0-beta6`.
+> The public API may still change between betas; `CHANGELOG.md` records it.
 
 ## What this package is
 
