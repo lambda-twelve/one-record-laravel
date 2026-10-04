@@ -138,7 +138,7 @@ return [
     */
     'cache' => ['store' => env('ONE_RECORD_CACHE_STORE')],   // PSR-16 for JWKS documents, tokens, server information
     'log' => ['channel' => env('ONE_RECORD_LOG_CHANNEL')],   // PSR-3 channel; null = the default channel
-    'http' => ['timeout' => 10, 'connect_timeout' => 5],     // Guzzle options for the PSR-18 client
+    'http' => ['timeout' => 10, 'connect_timeout' => 5],     // Guzzle options for the PSR-18 client: timeout, connect_timeout, verify, proxy
 
     /*
     |--------------------------------------------------------------------------

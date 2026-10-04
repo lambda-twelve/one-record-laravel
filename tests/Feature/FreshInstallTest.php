@@ -51,7 +51,8 @@ final class FreshInstallTest extends TestCase
         self::assertSame(0, Artisan::call('about', ['--only' => 'one_record']));
         $output = Artisan::output();
 
-        self::assertStringContainsString('Not configured: one-record.server.data_holder must be set', $output);
+        self::assertMatchesRegularExpression('/Configuration .*one-record\.server\.data_holder must be set/', $output, 'the problem, named without constructing the server');
+        self::assertMatchesRegularExpression('/Wiring \.+ Not checked/', $output);
     }
 
     public function testTheMissingDataHolderIsReportedWhenTheServerIsFirstNeeded(): void

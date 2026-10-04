@@ -8,11 +8,23 @@ All notable changes to this package are documented here. The format follows
 
 ### Changed
 
-- The SDK is required as `lambda-twelve/one-record:^1.0.0-beta5`. beta4 and
+- The SDK is required as `lambda-twelve/one-record:^1.0.0-beta6`. beta4 and
   beta5 fire `ActionRequestStatusChanged` and the status notification after a
   decision's side effects, add `Spi\Volatile`, `ServerBuilder::check()`,
   `Testing\RacingActionRequestStore` and `Client\DeliveryVerdict`, and extend
-  the request-store contract.
+  the request-store contract. beta6 states the `save()` envelope (only status,
+  history and errors change after the first save, so the contract no longer
+  moves a request between objects), deduplicates a delegation's objects, and
+  adds `ServerConfig::problems()`.
+- The `about` section judges the server configuration without constructing
+  it (`ServerConfigFactory::problems()`: this package's translation checks
+  first, then the SDK's `ServerConfig::problems()`), so a fresh install lists
+  everything still to set, and reports the SDK's wiring findings once the
+  configuration is complete.
+- A consumer smoke script (`tools/consumer-smoke.sh`) and CI job install the
+  package into a fresh Laravel application and walk the paths a new install
+  touches: boot and `about` before configuration, migrations, commands and
+  routes after it.
 - A failure the deliverer did not classify as `DeliveryFailed` or
   `DeliveryRejected` gets the SDK's `DeliveryVerdict`: transport failures and
   5xx, 408 and 429 are retried, everything else is final. Unexpected
@@ -27,6 +39,12 @@ All notable changes to this package are documented here. The format follows
   fresh install.
 
 ### Fixed
+
+- The package could not be installed into a current Laravel application: it
+  pinned Guzzle to `^7.9` while a fresh application ships Guzzle 8. The
+  constraints are now `^7.9 || ^8.0` for Guzzle and `^2.7 || ^3.0` for its
+  PSR-7 package; the suite runs against both majors. Found by the consumer
+  smoke on its first run.
 
 Findings of the sixth adversarial review (2026-10-04, the beta2 readiness
 pass), kept as regression tests in `tests/Feature/AdversarialReview6Test.php`:

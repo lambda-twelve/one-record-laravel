@@ -78,6 +78,18 @@ jobs:
           dependency-versions: ${{ matrix.dependencies }}
       - run: vendor/bin/phpunit --no-coverage
 
+  consumer:
+    name: Consumer install into a fresh Laravel application
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: json, openssl, pdo_sqlite, sqlite3
+          coverage: none
+      - run: tools/consumer-smoke.sh "$GITHUB_WORKSPACE" /tmp/consumer
+
   tests-mariadb:
     name: Tests (MariaDB)
     runs-on: ubuntu-latest

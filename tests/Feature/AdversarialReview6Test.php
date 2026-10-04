@@ -33,9 +33,12 @@ use RuntimeException;
 /**
  * The probes of the sixth adversarial review (2026-10-04, the beta2
  * readiness pass against 72dcc18), kept as regression tests. Two are about
- * save() replacing a request whole in the database store; one pins how the
- * SDK's decision events (after their effects, since beta4) meet the unit of
- * work bound here.
+ * save() replacing a request in the database store. The SDK's envelope
+ * (beta6) says the server never re-saves a request with another payload,
+ * type or object; the store keeps its query columns in step with the
+ * document anyway, and these tests hold it to that. One pins how the SDK's
+ * decision events (after their effects, since beta4) meet the unit of work
+ * bound here.
  */
 #[CoversClass(DatabaseActionRequestStore::class)]
 #[CoversClass(DatabaseSubscriptionStore::class)]
@@ -52,9 +55,10 @@ final class AdversarialReview6Test extends TestCase
     }
 
     /**
-     * AR6-001. An access delegation built in PHP may name the same object
+     * AR6-001. An access delegation built in PHP could name the same object
      * twice; the projection used to insert both rows and fail on its unique
-     * key, rolling the whole save back.
+     * key, rolling the whole save back. The SDK deduplicates at construction
+     * since beta6 and the store keys by object regardless.
      */
     public function testADelegationNamingTheSameObjectTwiceIsSaved(): void
     {

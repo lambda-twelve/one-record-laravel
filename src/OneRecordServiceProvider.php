@@ -123,20 +123,31 @@ final class OneRecordServiceProvider extends ServiceProvider
 
     /**
      * The package's section of `php artisan about`: versions, the storage
-     * driver, and the SDK's own wiring findings (ServerBuilder::check), or
-     * what is missing when the server cannot be configured yet.
+     * driver, what is wrong with the server configuration (without
+     * constructing it, so a fresh install gets an answer too), and, once that
+     * is complete, the SDK's own wiring findings (ServerBuilder::check).
      *
      * @return array<string, string>
      */
     private static function about(Container $app): array
     {
-        try {
-            $findings = ServerBuilder::check($app->make(Services::class));
-            $wiring = $findings === [] ? 'OK' : implode(' ', $findings);
-        } catch (InvalidArgumentException|LogicException $e) {   // a fresh install: the message says what to set
-            $wiring = 'Not configured: ' . $e->getMessage();
-        }
         $config = $app->make(Repository::class);
+        $server = $config->get('one-record.server', []);
+        /** @var array<string, mixed> $server */
+        $server = \is_array($server) ? $server : [];
+        $problems = ServerConfigFactory::problems($server);
+        if ($problems === []) {
+            $configuration = 'OK';
+            try {
+                $findings = ServerBuilder::check($app->make(Services::class));
+                $wiring = $findings === [] ? 'OK' : implode(' ', $findings);
+            } catch (LogicException $e) {   // a binding the application still owes, such as a custom authenticator
+                $wiring = 'Not wired: ' . $e->getMessage();
+            }
+        } else {
+            $configuration = implode(' ', $problems);
+            $wiring = 'Not checked until the configuration is complete.';
+        }
         $driver = $config->get('one-record.storage.driver', 'database');
         $dispatch = $config->get('one-record.outbox.dispatch', 'queue');
 
@@ -144,6 +155,7 @@ final class OneRecordServiceProvider extends ServiceProvider
             'SDK' => InstalledVersions::getPrettyVersion('lambda-twelve/one-record') ?? 'unknown',
             'Storage driver' => \is_scalar($driver) ? (string) $driver : 'database',
             'Outbox dispatch' => \is_scalar($dispatch) ? (string) $dispatch : 'queue',
+            'Configuration' => $configuration,
             'Wiring' => $wiring,
         ];
     }
@@ -161,7 +173,7 @@ final class OneRecordServiceProvider extends ServiceProvider
         foreach ([RequestFactoryInterface::class, ResponseFactoryInterface::class, ServerRequestFactoryInterface::class, StreamFactoryInterface::class, UploadedFileFactoryInterface::class, UriFactoryInterface::class] as $factory) {
             $this->app->bindIf($factory, static fn(Container $app): HttpFactory => $app->make(HttpFactory::class), true);
         }
-        $this->app->bindIf(ClientInterface::class, fn(): Client => new Client($this->arrayConfig('http')), true);
+        $this->app->bindIf(ClientInterface::class, fn(): Client => new Client($this->httpOptions()), true);
         $this->app->singleton(self::LOGGER, function (Container $app): LoggerInterface {
             $channel = $this->config('log.channel');
 
@@ -379,6 +391,31 @@ final class OneRecordServiceProvider extends ServiceProvider
         }
 
         return $cache;
+    }
+
+    /**
+     * The Guzzle options `one-record.http` may set, typed as Guzzle 8 declares
+     * them: the timeouts, certificate verification and a proxy.
+     *
+     * @return array{timeout?: float, connect_timeout?: float, verify?: bool|string, proxy?: string}
+     */
+    private function httpOptions(): array
+    {
+        $http = $this->arrayConfig('http');
+        $options = [];
+        foreach (['timeout', 'connect_timeout'] as $key) {
+            if (is_numeric($http[$key] ?? null)) {
+                $options[$key] = (float) $http[$key];
+            }
+        }
+        if (\is_bool($http['verify'] ?? null) || (\is_string($http['verify'] ?? null) && $http['verify'] !== '')) {
+            $options['verify'] = $http['verify'];
+        }
+        if (\is_string($http['proxy'] ?? null) && $http['proxy'] !== '') {
+            $options['proxy'] = $http['proxy'];
+        }
+
+        return $options;
     }
 
     private function connection(Container $app): ConnectionInterface

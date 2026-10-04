@@ -43,6 +43,56 @@ final class ServerConfigFactory
         );
     }
 
+    /**
+     * What is wrong with the `one-record.server` array, in plain sentences,
+     * without constructing anything: for a status page on an install that is
+     * not configured yet. This factory's own translation checks come first
+     * (they name the environment variables to set); when they all pass, the
+     * SDK's ServerConfig::problems() judges the translated settings. Empty
+     * means fromArray() would succeed.
+     *
+     * @param array<string, mixed> $config
+     * @return list<string>
+     */
+    public static function problems(array $config): array
+    {
+        $problems = [];
+        $settings = [
+            'languages' => $config['languages'] ?? ['en-US'],
+            'maxBodyBytes' => self::int($config['max_body_bytes'] ?? null, 1_048_576),
+            'embeddedDepth' => self::int($config['embedded_depth'] ?? null, 3),
+        ];
+        $endpoint = null;
+        try {
+            $settings['baseUrl'] = self::baseUrl($config['base_url'] ?? null);
+            $settings['basePath'] = self::basePath($config['base_path'] ?? '');
+            $endpoint = $settings['baseUrl'] . $settings['basePath'];
+        } catch (InvalidArgumentException $e) {
+            $problems[] = $e->getMessage();
+        }
+        $holder = $config['data_holder'] ?? null;
+        // A bare id is placed under the endpoint; with no usable base URL there is nothing to judge about
+        // it yet, and the base URL problem above already says what to fix first.
+        if ($endpoint !== null || !\is_string($holder) || trim($holder) === '' || str_contains($holder, '://')) {
+            try {
+                $settings['dataHolder'] = self::dataHolder($holder, $endpoint ?? '')->value;
+            } catch (InvalidArgumentException $e) {
+                $problems[] = $e->getMessage();
+            }
+        }
+        foreach (['api_versions' => 'apiVersions', 'data_model_versions' => 'dataModelVersions'] as $key => $setting) {
+            try {
+                $settings[$setting] = $key === 'api_versions'
+                    ? self::versions($config[$key] ?? null, $key, static fn(string $v): ?ApiVersion => ApiVersion::tryFromString($v))
+                    : self::versions($config[$key] ?? null, $key, static fn(string $v): ?DataModelVersion => DataModelVersion::tryFromString($v));
+            } catch (InvalidArgumentException $e) {
+                $problems[] = $e->getMessage();
+            }
+        }
+
+        return $problems === [] ? ServerConfig::problems($settings) : $problems;
+    }
+
     private static function int(mixed $value, int $default): int
     {
         return \is_int($value) ? $value : (is_numeric($value) ? (int) $value : $default);

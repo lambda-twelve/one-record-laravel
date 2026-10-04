@@ -111,6 +111,7 @@ final class ServiceProviderTest extends TestCase
         self::assertStringContainsString('ONE Record', $output);
         self::assertMatchesRegularExpression('/SDK \.+ 1\.0\.0-beta\d+/', $output);
         self::assertMatchesRegularExpression('/Storage driver \.+ array/', $output);
+        self::assertMatchesRegularExpression('/Configuration \.+ OK/', $output);
         self::assertMatchesRegularExpression('/Wiring \.+ OK/', $output, 'the unit of work is bound, so the SDK reports nothing');
     }
 

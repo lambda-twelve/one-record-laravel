@@ -68,14 +68,15 @@ final class DatabaseActionRequestStore implements ActionRequestStore
                 'document' => Json::encode($request->toJsonLd($version), false),
                 'created_at' => $now,
                 'updated_at' => $now,
-                // save() replaces the request whole: every column derived from it follows (the type, the
-                // requester, the subscription projection, cleared when the new payload is not one), so the
-                // SQL filters agree with the document. Only created_at is the row's own (AR6-002).
+                // Every column derived from the request follows the document, so the SQL filters can never
+                // disagree with it (AR6-002). The SDK's envelope (beta6) says only status, history and errors
+                // change after the first save; keeping the rest in step costs nothing and holds either way.
+                // Only created_at is the row's own.
             ]], ['iri_hash'], ['type', 'status', 'requested_by_hash', 'requested_by', 'requested_at', 'status_since', 'last_modified', 'topic_type', 'topic', 'topic_hash', 'subscriber_hash', 'expires_at', 'api_version', 'document', 'updated_at']);
 
-            // The object projection follows too, so a request saved again under the same IRI for another
-            // object leaves no row behind on the old one (the SDK's contract since beta5). One row per
-            // distinct object: a payload may name the same IRI twice (AR6-001).
+            // The object projection follows the document too, one row per distinct object. The SDK
+            // deduplicates a delegation's objects itself since beta6 (AR6-001); the keying stays as a
+            // second line for payloads built outside the SDK's constructors.
             $objects = [];
             foreach ($request->logisticsObjects() as $object) {
                 $objects[IriHash::of($object)] = ['action_request_hash' => $hash, 'logistics_object_hash' => IriHash::of($object), 'logistics_object_iri' => $object->value];

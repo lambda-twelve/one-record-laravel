@@ -58,6 +58,25 @@ final class ServerConfigFactoryTest extends TestCase
         self::assertFalse($config->bulkLogisticsEvents);
     }
 
+    public function testProblemsNameWhatIsMissingWithoutConstructingAnything(): void
+    {
+        $valid = ['base_url' => 'https://1r.test', 'base_path' => '/one-record', 'data_holder' => 'holder'];
+        self::assertSame([], ServerConfigFactory::problems($valid));
+
+        $problems = ServerConfigFactory::problems(['base_url' => 'https://1r.test', 'base_path' => '/one-record', 'data_holder' => null]);
+        self::assertCount(1, $problems);
+        self::assertStringContainsString('ONE_RECORD_DATA_HOLDER', $problems[0], 'this factory names the variable to set');
+
+        $problems = ServerConfigFactory::problems(['base_url' => 'https://1r.test/app', 'data_holder' => 'holder', 'api_versions' => '9.9.9']);
+        self::assertCount(2, $problems, 'every translation problem, not just the first');
+        self::assertStringContainsString('base_path', $problems[0]);
+        self::assertStringContainsString('9.9.9', $problems[1]);
+
+        $problems = ServerConfigFactory::problems($valid + ['languages' => ['de-DE']]);
+        self::assertCount(1, $problems);
+        self::assertStringContainsString('en-US', $problems[0], 'what translates cleanly is judged by the SDK');
+    }
+
     /**
      * @param array<string, mixed> $config
      */

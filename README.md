@@ -4,7 +4,7 @@ Laravel integration for [`lambda-twelve/one-record`](https://github.com/lambda-t
 the framework-agnostic PHP implementation of **IATA ONE Record**.
 
 > **Status:** pre-release. `1.0.0-beta1` follows the SDK's `1.0.0-beta3`; the
-> main branch follows `1.0.0-beta5`. The public API may still change between
+> main branch follows `1.0.0-beta6`. The public API may still change between
 > betas; `CHANGELOG.md` records it.
 
 ## What this package is
@@ -52,7 +52,7 @@ honours a stability flag written in the root `composer.json`, so allow it for
 these two packages rather than lowering your application's minimum stability:
 
 ```sh
-composer require "lambda-twelve/one-record:^1.0.0-beta5" "lambda-twelve/one-record-laravel:^1.0@beta"
+composer require "lambda-twelve/one-record:^1.0.0-beta6" "lambda-twelve/one-record-laravel:^1.0@beta"
 ```
 
 The service provider is auto-discovered. Publish the configuration and, if you
@@ -90,8 +90,10 @@ All IRIs the server mints embed `base_url` and `base_path` and are stored
 inside the published graphs: changing either later orphans stored data.
 
 `php artisan about` has a ONE Record section: the SDK version, the storage
-driver, the outbox dispatch mode, and the SDK's own wiring findings
-(`ServerBuilder::check()`), or what is still missing on a fresh install.
+driver, the outbox dispatch mode, what is wrong with the server configuration
+(judged without constructing it, so a fresh install gets a list of what to
+set), and, once that is complete, the SDK's own wiring findings
+(`ServerBuilder::check()`).
 
 ## Serving ONE Record: the quick start
 
