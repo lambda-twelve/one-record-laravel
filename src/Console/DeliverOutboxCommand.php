@@ -41,7 +41,7 @@ final class DeliverOutboxCommand extends Command
             if ($inline) {
                 (new DeliverNotification($id))->handle($app);
             } else {
-                DeliverNotification::dispatchFor($id, $config);
+                DeliverNotification::dispatchFor($app, $id);
             }
         }
         $this->components->info(\sprintf('%d due notification(s) %s.', \count($ids), $inline ? 'processed' : 'dispatched'));

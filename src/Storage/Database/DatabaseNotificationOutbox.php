@@ -6,6 +6,7 @@ namespace LambdaTwelve\OneRecord\Laravel\Storage\Database;
 
 use Closure;
 use DateTimeImmutable;
+use Illuminate\Database\Connection;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Query\Builder;
 use LambdaTwelve\OneRecord\Api\Notification;
@@ -29,7 +30,7 @@ use LambdaTwelve\OneRecord\Server\Spi\OutboundNotification;
 final class DatabaseNotificationOutbox implements NotificationOutbox
 {
     /**
-     * @param ?Closure(int): void $onEnqueued called with the new row id, e.g. to dispatch a delivery job after commit
+     * @param ?Closure(int): void $onEnqueued called with the new row id once the enqueuing transaction has committed (at once outside one), e.g. to queue a delivery job
      */
     public function __construct(
         private readonly ConnectionInterface $db,
@@ -53,7 +54,13 @@ final class DatabaseNotificationOutbox implements NotificationOutbox
             'next_attempt_at' => Timestamps::toDb($notification->createdAt),
         ]);
         if ($this->onEnqueued !== null) {
-            ($this->onEnqueued)($id);
+            $onEnqueued = $this->onEnqueued;
+            $notify = static function () use ($onEnqueued, $id): void {
+                $onEnqueued($id);
+            };
+            // Only once the row is committed: a job that ran before would find no row, and a rolled-back
+            // enqueue must leave no job behind. Outside a transaction the connection runs it at once.
+            $this->db instanceof Connection ? $this->db->afterCommit($notify) : $notify();
         }
     }
 

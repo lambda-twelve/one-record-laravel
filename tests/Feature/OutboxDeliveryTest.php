@@ -37,6 +37,7 @@ use LambdaTwelve\OneRecord\Server\Spi\NotificationOutbox;
 use LambdaTwelve\OneRecord\Vocabulary\Generated\Cargo;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Psr\Clock\ClockInterface;
+use RuntimeException;
 
 /**
  * From the SDK's fan-out to a delivered notification: the SDK enqueues a row,
@@ -111,7 +112,26 @@ final class OutboxDeliveryTest extends TestCase
         self::assertSame(self::PARTNER, $pending->outbound->recipient->value);
         self::assertSame('https://partner.example/notifications', $pending->endpoint);
         self::assertSame(NotificationEventType::LogisticsObjectCreated, $pending->outbound->notification->eventType);
-        Bus::assertDispatched(DeliverNotification::class, static fn(DeliverNotification $job): bool => $job->outboxId === $id && $job->afterCommit === true);
+        Bus::assertDispatched(DeliverNotification::class, static fn(DeliverNotification $job): bool => $job->outboxId === $id);
+    }
+
+    public function testARolledBackEnqueueQueuesNoJob(): void
+    {
+        Bus::fake();
+        $holder = $this->app()->make(DataHolder::class);
+        $holder->subscribe(new Subscription(new Iri(self::PARTNER), TopicType::Type, Cargo::Piece, [SubscriptionEventType::LogisticsObjectCreated]));
+        $this->app()->make(\Illuminate\Contracts\Events\Dispatcher::class)->listen(\LambdaTwelve\OneRecord\Server\Event\LogisticsObjectCreated::class, static function (): void {
+            throw new RuntimeException('listener failed after the fan-out enqueued');
+        });
+
+        try {
+            $holder->create(ObjectBuilder::of(Cargo::Piece)->set(Cargo::goodsDescription, 'Flowers')->build($this->app()->make(ServerConfig::class)->logisticsObjectIri('piece-1')));
+            self::fail('the listener failure propagates');
+        } catch (RuntimeException) {
+        }
+
+        self::assertSame([], $this->outbox()->due($this->app()->make(ClockInterface::class)->now(), 10), 'the row went with the unit of work');
+        Bus::assertNothingDispatched();
     }
 
     public function testNoJobIsDispatchedWhenDispatchIsOff(): void

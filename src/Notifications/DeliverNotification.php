@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace LambdaTwelve\OneRecord\Laravel\Notifications;
 
 use DateTimeInterface;
+use Illuminate\Bus\UniqueLock;
+use Illuminate\Contracts\Bus\Dispatcher as Bus;
+use Illuminate\Contracts\Cache\Repository as Cache;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher as Events;
@@ -32,9 +35,10 @@ use Throwable;
  * the notification id.
  *
  * One queued job per row: the unique lock is taken when the job is queued
- * (through dispatchFor(), never the bus contract directly, which skips it)
- * and released when processing starts, so the retry a running job dispatches
- * for its own row is never refused.
+ * (through dispatchFor(), never the bus contract directly, which skips it),
+ * given back if the queue refuses the job, and released when processing
+ * starts, so the retry a running job dispatches for its own row is never
+ * refused.
  */
 final class DeliverNotification implements ShouldQueue, ShouldBeUniqueUntilProcessing
 {
@@ -97,7 +101,7 @@ final class DeliverNotification implements ShouldQueue, ShouldBeUniqueUntilProce
                 $next = $clock->now()->modify('+' . Backoff::seconds($attempt) . ' seconds');
                 $recorded = $outbox->markRetry($lease, $next, $e->getMessage());
                 if ($recorded && $config->get('one-record.outbox.dispatch') === 'queue') {
-                    self::dispatchFor($this->outboxId, $config, $next);
+                    self::dispatchFor($app, $this->outboxId, $next);
                 }
             }
             if ($this->recorded($app, $lease, $recorded)) {
@@ -113,28 +117,39 @@ final class DeliverNotification implements ShouldQueue, ShouldBeUniqueUntilProce
     }
 
     /**
-     * Queues a job for a row, on the configured connection and queue, released
-     * only after the enqueuing transaction commits, and only if no job for the
-     * row is queued already. The dispatch() helper hands the job to a
-     * PendingDispatch, which takes the unique-job lock; the bus contract's
-     * dispatch() does not, so that path is never used for this job.
+     * Queues a job for a row, on the configured connection and queue, unless
+     * one is queued already. The unique-job lock is taken here rather than by
+     * Laravel's PendingDispatch so that a queue that refuses the job (an
+     * outage, a listener that throws) gives the lock back at once: a lock
+     * left behind would keep every sweep from queuing the row again until it
+     * expired (AR2-002). The outbox calls this only after the enqueuing
+     * transaction has committed.
      */
-    public static function dispatchFor(int $outboxId, Repository $config, ?DateTimeInterface $delayUntil = null): void
+    public static function dispatchFor(Container $app, int $outboxId, ?DateTimeInterface $delayUntil = null): void
     {
-        $job = self::forRow($outboxId, $config);
+        $job = self::forRow($outboxId, $app->make(Repository::class));
         if ($delayUntil !== null) {
             $job->delay($delayUntil);
         }
-        dispatch($job);
+        $lock = new UniqueLock($app->make(Cache::class));
+        if (!$lock->acquire($job)) {
+            return;   // a job for this row is queued and not yet started
+        }
+        try {
+            $app->make(Bus::class)->dispatch($job);
+        } catch (Throwable $e) {
+            $lock->release($job);
+
+            throw $e;
+        }
     }
 
     /**
-     * A job for a row, on the configured connection and queue, released only
-     * after the enqueuing transaction commits.
+     * A job for a row, on the configured connection and queue.
      */
     public static function forRow(int $outboxId, Repository $config): self
     {
-        $job = (new self($outboxId))->afterCommit();
+        $job = new self($outboxId);
         $connection = $config->get('one-record.outbox.connection');
         $queue = $config->get('one-record.outbox.queue');
         if (\is_string($connection) && $connection !== '') {

@@ -9,7 +9,6 @@ use Illuminate\Bus\UniqueLock;
 use Illuminate\Cache\ArrayStore;
 use Illuminate\Cache\Repository as CacheRepository;
 use Illuminate\Contracts\Cache\Repository as Cache;
-use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -205,15 +204,14 @@ final class AdversarialReviewTest extends TestCase
     public function testDispatchingTheSameRowTwiceQueuesOneJob(): void
     {
         Bus::fake();
-        $config = $this->app()->make(Repository::class);
 
-        DeliverNotification::dispatchFor(42, $config);
-        DeliverNotification::dispatchFor(42, $config);
+        DeliverNotification::dispatchFor($this->app(), 42);
+        DeliverNotification::dispatchFor($this->app(), 42);
         Bus::assertDispatchedTimes(DeliverNotification::class, 1);
 
         // The lock is what a worker releases when it starts the job; afterwards the row may be queued again.
         (new UniqueLock($this->app()->make(Cache::class)))->release(new DeliverNotification(42));
-        DeliverNotification::dispatchFor(42, $config);
+        DeliverNotification::dispatchFor($this->app(), 42);
         Bus::assertDispatchedTimes(DeliverNotification::class, 2);
     }
 }

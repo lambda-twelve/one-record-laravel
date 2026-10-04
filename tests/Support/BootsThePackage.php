@@ -35,6 +35,9 @@ trait BootsThePackage
         $config->set('database.default', DatabaseConnection::name());
         $config->set('database.connections.' . DatabaseConnection::name(), DatabaseConnection::config());
         $config->set('logging.default', 'null');
+        // Not whatever a generated Testbench .env says: the unique-job lock needs a cache store that exists.
+        $config->set('cache.default', 'array');
+        $config->set('queue.default', 'sync');
         $config->set('app.url', TestCase::BASE);
         $config->set('one-record.server.base_url', TestCase::BASE);
         $config->set('one-record.server.base_path', TestCase::BASE_PATH);

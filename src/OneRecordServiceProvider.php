@@ -183,9 +183,9 @@ final class OneRecordServiceProvider extends ServiceProvider
             $app,
             static fn(InMemoryState $s): NotificationOutbox => $s->outbox,
             fn(ConnectionInterface $db, Tables $t): NotificationOutbox => new DatabaseNotificationOutbox($db, $t, $this->config('outbox.dispatch', 'queue') === 'queue'
-                // The job is released only after the enqueuing transaction commits, so it never races the row.
+                // Called by the outbox once the enqueuing transaction has committed, so the job never races the row.
                 ? static function (int $id) use ($app): void {
-                    DeliverNotification::dispatchFor($id, $app->make(Repository::class));
+                    DeliverNotification::dispatchFor($app, $id);
                 }
                 : null),
         ));

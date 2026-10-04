@@ -31,12 +31,33 @@ All notable changes to this package are documented here. The format follows
   return whether it still held. The outbox table gains `lease_token`.
 - `DeliverNotification` is unique per row until processing starts
   (`ShouldBeUniqueUntilProcessing`, an hour at most) and is always queued
-  through `DeliverNotification::dispatchFor()`, which takes that lock.
+  through `DeliverNotification::dispatchFor()`, which takes that lock and
+  gives it back when the queue refuses the job. The outbox itself defers
+  that call to the commit of the enqueuing transaction; the job no longer
+  carries `afterCommit`.
+- `lease_token` arrives through a forward migration
+  (`2026_10_04_000000_add_lease_token_to_one_record_outbox`), so a database
+  migrated before it keeps its rows and gains the column from `migrate`.
 
 ### Fixed
 
-Findings of the adversarial review of 2026-10-04, each kept as a regression
-test in `tests/Feature/AdversarialReviewTest.php` and
+Findings of the second adversarial review (2026-10-04, against the fixes
+below), kept as regression tests in `tests/Feature/AdversarialReview2Test.php`:
+
+- Existing installations did not receive the `lease_token` column, because it
+  had been added to the already-applied table-creation migration; claims then
+  failed on the missing column. It now comes from a forward migration.
+- A queue that refused a delivery job left the unique-job lock behind, so
+  sweeps skipped the row for up to an hour after the queue recovered. The
+  lock is released when the dispatch throws.
+- The README still called public grants process-local; the SDK's
+  `GrantAccessPolicy::allowEveryone()` writes them through the grant store,
+  which the database driver persists.
+- The test environment pins the array cache and the sync queue, so a
+  generated Testbench `.env` cannot select stores the test database lacks.
+
+Findings of the first adversarial review of 2026-10-04, each kept as a
+regression test in `tests/Feature/AdversarialReviewTest.php` and
 `tests/Feature/FreshInstallTest.php`:
 
 - An action-request decision that lost the status race to a competing

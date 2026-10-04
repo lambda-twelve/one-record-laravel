@@ -380,8 +380,6 @@ PostgreSQL. See `CONTRIBUTING.md`.
 
 - A default `NotificationDeliverer` and a partner client factory over the
   SDK's PSR-18 client: pending the SDK's client release.
-- Public (anyone-authenticated) grants are kept per process by the SDK's
-  policy; persist them in your own `AccessPolicy` if you need them.
 - Multiple data holders in one application: the SDK serves one data holder
   per `Services`; resolve a per-tenant server yourself if you need more.
 
