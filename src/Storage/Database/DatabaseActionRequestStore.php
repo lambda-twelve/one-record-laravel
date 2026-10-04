@@ -74,9 +74,12 @@ final class DatabaseActionRequestStore implements ActionRequestStore
             foreach ($request->logisticsObjects() as $object) {
                 $objects[] = ['action_request_hash' => $hash, 'logistics_object_hash' => IriHash::of($object), 'logistics_object_iri' => $object->value];
             }
+            // save() replaces the request whole, the objects it concerns included: the projection
+            // follows, so a request saved again under the same IRI for another object leaves no row
+            // behind on the old one (the SDK's contract since beta5).
+            $this->db->table($this->tables->actionRequestObjects())->where('action_request_hash', $hash)->delete();
             if ($objects !== []) {
-                // The payload is immutable, so the set of objects never changes after the first save.
-                $this->db->table($this->tables->actionRequestObjects())->insertOrIgnore($objects);
+                $this->db->table($this->tables->actionRequestObjects())->insert($objects);
             }
         });
     }

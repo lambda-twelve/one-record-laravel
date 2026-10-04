@@ -9,6 +9,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\HttpFactory;
 use GuzzleHttp\Psr7\ServerRequest;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
+use Illuminate\Support\Facades\Artisan;
 use LambdaTwelve\OneRecord\Auth\JwtAuthenticator;
 use LambdaTwelve\OneRecord\Laravel\Bridge\LaravelClock;
 use LambdaTwelve\OneRecord\Laravel\Bridge\LaravelEventDispatcher;
@@ -98,6 +99,19 @@ final class ServiceProviderTest extends TestCase
         self::assertInstanceOf(DatabaseUnitOfWork::class, $this->app()->make(UnitOfWork::class));
         self::assertSame($this->app()->make(UnitOfWork::class), $services->unitOfWork);
         self::assertSame([], $logger->records, 'no "operations will not be atomic" warning');
+    }
+
+    public function testTheAboutCommandShowsTheSdkWiringFindings(): void
+    {
+        // Artisan::output() rather than PendingCommand's expectations: the two-column lines of
+        // `about` are padded to the terminal width, which the command mock does not reproduce.
+        self::assertSame(0, Artisan::call('about', ['--only' => 'one_record']));
+        $output = Artisan::output();
+
+        self::assertStringContainsString('ONE Record', $output);
+        self::assertMatchesRegularExpression('/SDK \.+ 1\.0\.0-beta\d+/', $output);
+        self::assertMatchesRegularExpression('/Storage driver \.+ array/', $output);
+        self::assertMatchesRegularExpression('/Wiring \.+ OK/', $output, 'the unit of work is bound, so the SDK reports nothing');
     }
 
     public function testFrameworkServicesAreBoundForTheSdk(): void

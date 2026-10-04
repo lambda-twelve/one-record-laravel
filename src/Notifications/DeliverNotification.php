@@ -14,6 +14,7 @@ use Illuminate\Contracts\Events\Dispatcher as Events;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use LambdaTwelve\OneRecord\Client\DeliveryVerdict;
 use LambdaTwelve\OneRecord\Laravel\Notifications\Events\NotificationDelivered;
 use LambdaTwelve\OneRecord\Laravel\Notifications\Events\NotificationDeliveryFailed;
 use LambdaTwelve\OneRecord\Laravel\OneRecordServiceProvider;
@@ -32,7 +33,9 @@ use Throwable;
  * a worker whose lease expired mid-delivery cannot overwrite the outcome of
  * the worker that took over. Retries are scheduled from the row's attempt
  * count with Backoff. Delivery is at least once; recipients deduplicate on
- * the notification id.
+ * the notification id. A deliverer says what it knows by throwing
+ * DeliveryFailed (retry) or DeliveryRejected (final); anything else is
+ * classified by the SDK's DeliveryVerdict, the same way every host does.
  *
  * One queued job per row: the unique lock is taken when the job is queued
  * (through dispatchFor(), never the bus contract directly, which skips it),
@@ -93,8 +96,11 @@ final class DeliverNotification implements ShouldQueue, ShouldBeUniqueUntilProce
             }
 
             return;
-        } catch (Throwable $e) {   // DeliveryFailed, or anything unexpected: worth another try
-            $final = $attempt >= self::int($config->get('one-record.outbox.max_attempts'), 10);
+        } catch (Throwable $e) {
+            // DeliveryFailed is the deliverer's own verdict; for anything else the SDK decides: transport
+            // failures and 5xx / 408 / 429 are retried, every other answer or a sending-side defect is final.
+            $retry = $e instanceof DeliveryFailed || DeliveryVerdict::of($e) === DeliveryVerdict::Retry;
+            $final = !$retry || $attempt >= self::int($config->get('one-record.outbox.max_attempts'), 10);
             if ($final) {
                 $recorded = $outbox->markFailed($lease, $clock->now(), $e->getMessage());
             } else {

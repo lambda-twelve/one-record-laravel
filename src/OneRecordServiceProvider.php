@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace LambdaTwelve\OneRecord\Laravel;
 
+use Composer\InstalledVersions;
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\HttpFactory;
 use Illuminate\Contracts\Cache\Factory as CacheFactory;
@@ -13,6 +14,7 @@ use Illuminate\Contracts\Foundation\CachesRoutes;
 use Illuminate\Contracts\Hashing\Hasher;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\ConnectionResolverInterface;
+use Illuminate\Foundation\Console\AboutCommand;
 use Illuminate\Log\LogManager;
 use Illuminate\Support\ServiceProvider;
 use InvalidArgumentException;
@@ -113,7 +115,37 @@ final class OneRecordServiceProvider extends ServiceProvider
         }
         if ($this->app->runningInConsole()) {
             $this->commands([CreateClientCommand::class, DeliverOutboxCommand::class, PruneOutboxCommand::class, RetryOutboxCommand::class]);
+            // Resolved against the current container, not this provider's: AboutCommand keeps its
+            // sections statically, so a resolver may outlive the application that registered it.
+            AboutCommand::add('ONE Record', static fn(): array => self::about(\Illuminate\Container\Container::getInstance()));
         }
+    }
+
+    /**
+     * The package's section of `php artisan about`: versions, the storage
+     * driver, and the SDK's own wiring findings (ServerBuilder::check), or
+     * what is missing when the server cannot be configured yet.
+     *
+     * @return array<string, string>
+     */
+    private static function about(Container $app): array
+    {
+        try {
+            $findings = ServerBuilder::check($app->make(Services::class));
+            $wiring = $findings === [] ? 'OK' : implode(' ', $findings);
+        } catch (InvalidArgumentException|LogicException $e) {   // a fresh install: the message says what to set
+            $wiring = 'Not configured: ' . $e->getMessage();
+        }
+        $config = $app->make(Repository::class);
+        $driver = $config->get('one-record.storage.driver', 'database');
+        $dispatch = $config->get('one-record.outbox.dispatch', 'queue');
+
+        return [
+            'SDK' => InstalledVersions::getPrettyVersion('lambda-twelve/one-record') ?? 'unknown',
+            'Storage driver' => \is_scalar($driver) ? (string) $driver : 'database',
+            'Outbox dispatch' => \is_scalar($dispatch) ? (string) $dispatch : 'queue',
+            'Wiring' => $wiring,
+        ];
     }
 
     /**

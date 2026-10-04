@@ -88,6 +88,10 @@ package keeps no configuration model of its own.
 All IRIs the server mints embed `base_url` and `base_path` and are stored
 inside the published graphs: changing either later orphans stored data.
 
+`php artisan about` has a ONE Record section: the SDK version, the storage
+driver, the outbox dispatch mode, and the SDK's own wiring findings
+(`ServerBuilder::check()`), or what is still missing on a fresh install.
+
 ## Serving ONE Record: the quick start
 
 Point `ONE_RECORD_DATA_HOLDER` at your organisation, trust at least one
@@ -310,16 +314,20 @@ final class PartnerDeliverer implements NotificationDeliverer
         $endpoint = $pending->endpoint;                    // suggested from the recipient IRI, may be null
         $document = $pending->outbound->notification->toJsonLd();
         // POST $document to the partner with its token; throw DeliveryFailed to retry,
-        // DeliveryRejected to give up.
+        // DeliveryRejected to give up. Built on the SDK's client, let its verdict decide:
+        // DeliveryVerdict::of($e) === DeliveryVerdict::Retry ? DeliveryFailed : DeliveryRejected.
     }
 }
 
 $this->app->bind(NotificationDeliverer::class, PartnerDeliverer::class);
 ```
 
-A default deliverer built on the SDK's client arrives when that client is
-released. Until a deliverer is bound, rows wait and a warning is logged;
-nothing is lost.
+Any other exception a deliverer throws gets the SDK's classification
+(`LambdaTwelve\OneRecord\Client\DeliveryVerdict`): transport failures and
+5xx, 408 and 429 answers are retried, everything else is final and waits for
+an operator's `one-record:outbox:retry`. A default deliverer built on the
+SDK's client is the next thing on the list. Until a deliverer is bound, rows
+wait and a warning is logged; nothing is lost.
 
 Commands: `one-record:outbox:deliver [--limit=100] [--inline]` picks up due
 rows (schedule it every minute as the safety net, or as the only mechanism

@@ -6,6 +6,7 @@ namespace LambdaTwelve\OneRecord\Laravel\Tests\Feature;
 
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Routing\Router;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Testing\PendingCommand;
 use InvalidArgumentException;
 use LambdaTwelve\OneRecord\Laravel\OneRecord;
@@ -43,6 +44,14 @@ final class FreshInstallTest extends TestCase
         $list = $this->artisan('list');
         self::assertInstanceOf(PendingCommand::class, $list);
         $list->expectsOutputToContain('one-record:outbox:deliver')->assertSuccessful()->run();
+    }
+
+    public function testTheAboutCommandSaysWhatIsMissing(): void
+    {
+        self::assertSame(0, Artisan::call('about', ['--only' => 'one_record']));
+        $output = Artisan::output();
+
+        self::assertStringContainsString('Not configured: one-record.server.data_holder must be set', $output);
     }
 
     public function testTheMissingDataHolderIsReportedWhenTheServerIsFirstNeeded(): void

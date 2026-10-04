@@ -200,6 +200,30 @@ final class OutboxDeliveryTest extends TestCase
         self::assertSame([$id], $this->outbox()->due($now->modify('+2 minutes')->modify('+301 seconds'), 10));
     }
 
+    /**
+     * A deliverer that throws something other than DeliveryFailed or
+     * DeliveryRejected gets the SDK's verdict: a transport failure (a PSR-18
+     * exception) is retried, a defect on the sending side is final.
+     */
+    public function testUnclassifiedFailuresGetTheSdkVerdict(): void
+    {
+        Bus::fake();
+        Event::fake([NotificationDeliveryFailed::class]);
+        $id = $this->publishWithSubscriber();
+        $now = $this->app()->make(ClockInterface::class)->now();
+
+        $this->deliverer->failWith(new class ('connection reset') extends RuntimeException implements \Psr\Http\Client\ClientExceptionInterface {});
+        $this->process($id);
+        self::assertSame([$id], $this->outbox()->due($now->modify('+61 seconds'), 10), 'a transport failure is retried');
+        Event::assertDispatched(NotificationDeliveryFailed::class, static fn(NotificationDeliveryFailed $e): bool => !$e->final);
+
+        $this->travelTo($now->modify('+2 minutes'));
+        $this->deliverer->failWith(new RuntimeException('null pointer in the deliverer'));
+        $this->process($id);
+        self::assertSame([], $this->outbox()->due($now->modify('+10 days'), 10), 'a sending-side defect is final');
+        Event::assertDispatched(NotificationDeliveryFailed::class, static fn(NotificationDeliveryFailed $e): bool => $e->final && $e->error === 'null pointer in the deliverer');
+    }
+
     public function testAttemptsAreGivenUpAtTheConfiguredMaximum(): void
     {
         Bus::fake();

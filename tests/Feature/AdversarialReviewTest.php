@@ -42,6 +42,7 @@ use LambdaTwelve\OneRecord\Server\Spi\Authenticator;
 use LambdaTwelve\OneRecord\Server\Spi\Decision;
 use LambdaTwelve\OneRecord\Server\Spi\NotificationOutbox;
 use LambdaTwelve\OneRecord\Server\Spi\OutboundNotification;
+use LambdaTwelve\OneRecord\Testing\RacingActionRequestStore;
 use LambdaTwelve\OneRecord\Vocabulary\Generated\Cargo;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Psr\Clock\ClockInterface;
@@ -82,11 +83,11 @@ final class AdversarialReviewTest extends TestCase
      * before any side effect, so a lost decision writes nothing even without
      * a transaction.
      *
-     * The competing decision is injected on the second read of the request
-     * (the one accept() takes before deciding). It runs on the same connection
-     * as the request, so when the acceptance unwinds, the injected rejection
-     * unwinds with it; a real competitor commits on its own connection and the
-     * stored status would read Rejected.
+     * The race is staged with the SDK's RacingActionRequestStore (beta4): the
+     * competing worker rejects the request just before our compare-and-set.
+     * It runs on the same connection as the request, so when the acceptance
+     * unwinds, the injected rejection unwinds with it; a real competitor
+     * commits on its own connection and the stored status would read Rejected.
      */
     public function testADecisionThatLosesTheStatusRaceLeavesNoGrantBehind(): void
     {
@@ -99,17 +100,12 @@ final class AdversarialReviewTest extends TestCase
         $request = ActionRequest::create($config->actionRequestIri('race'), new AccessDelegation([Permission::GetLogisticsObject], [$partner], [$object]), $partner, $app->make(ClockInterface::class)->now());
         $real->save($request);
 
-        $reads = 0;
-        $racing = self::createStub(ActionRequestStore::class);
-        $racing->method('get')->willReturnCallback(static function (Iri $iri) use ($real, &$reads, $holder): ?ActionRequest {
-            $snapshot = $real->get($iri);
-            if (++$reads === 2 && $snapshot !== null) {
-                $real->transition($snapshot->withStatus(RequestStatus::Rejected, new DateTimeImmutable(), $holder), RequestStatus::Pending);
-            }
-
-            return $snapshot;
+        $racing = new RacingActionRequestStore($real);
+        $racing->arm($request->iri, static function (ActionRequest $accepting) use ($real, $holder): void {
+            $pending = $real->get($accepting->iri);
+            self::assertNotNull($pending);
+            $real->transition($pending->withStatus(RequestStatus::Rejected, new DateTimeImmutable(), $holder), RequestStatus::Pending);
         });
-        $racing->method('transition')->willReturnCallback(static fn(ActionRequest $r, RequestStatus $expected) => $real->transition($r, $expected));
         $app->instance(ActionRequestStore::class, $racing);
 
         $response = $this->call('PATCH', $request->iri->value . '?status=REQUEST_ACCEPTED', [], [], [], [
@@ -118,6 +114,7 @@ final class AdversarialReviewTest extends TestCase
         ]);
 
         $response->assertStatus(409);
+        self::assertSame(1, $racing->racesLost);
         self::assertNotSame(RequestStatus::Accepted, $real->get($request->iri)?->status);
         self::assertSame([], $app->make(AccessDelegationStore::class)->grantsFor($partner, $object), 'the grants of the lost acceptance were rolled back');
         self::assertSame(Decision::Forbid, $app->make(AccessPolicy::class)->decide(new Agent($partner), Action::ReadLogisticsObject, $object));

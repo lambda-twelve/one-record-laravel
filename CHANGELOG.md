@@ -6,7 +6,32 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- The SDK is required as `lambda-twelve/one-record:^1.0.0-beta5`. beta4 and
+  beta5 fire `ActionRequestStatusChanged` and the status notification after a
+  decision's side effects, add `Spi\Volatile`, `ServerBuilder::check()`,
+  `Testing\RacingActionRequestStore` and `Client\DeliveryVerdict`, and extend
+  the request-store contract.
+- A failure the deliverer did not classify as `DeliveryFailed` or
+  `DeliveryRejected` gets the SDK's `DeliveryVerdict`: transport failures and
+  5xx, 408 and 429 are retried, everything else is final. Unexpected
+  exceptions used to be retried until the attempt limit.
+- The lost-decision regression test stages its race with the SDK's
+  `RacingActionRequestStore` instead of a hand-made stub.
+
+### Added
+
+- A ONE Record section in `php artisan about`: SDK version, storage driver,
+  outbox dispatch mode, and the SDK's wiring findings, or what is missing on a
+  fresh install.
+
+### Fixed
+
+- Saving an action request again under the same IRI for another logistics
+  object left the old object's projection row behind, so the request kept
+  appearing in that object's audit trail and pending changes. The projection
+  now follows the request. Found by the SDK's extended contract (beta5).
 
 ## [1.0.0-beta1] - 2026-10-04
 
