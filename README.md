@@ -46,13 +46,9 @@ PSR-7.
 
 ## Installation
 
-```sh
-composer require lambda-twelve/one-record-laravel
-```
-
-The SDK is a pre-release on Packagist, and Composer only honours a stability
-flag written in the root `composer.json`, so allow it for that one package
-rather than lowering your application's minimum stability:
+The SDK and this package are pre-releases on Packagist, and Composer only
+honours a stability flag written in the root `composer.json`, so allow it for
+these two packages rather than lowering your application's minimum stability:
 
 ```sh
 composer require "lambda-twelve/one-record:^1.0.0-beta3" "lambda-twelve/one-record-laravel:^1.0@beta"
