@@ -34,10 +34,11 @@ use RuntimeException;
  * after_commit: the layout in which Laravel can defer a queue submission to
  * a transaction other than the one that enqueued the notification.
  *
- * What remains by design: a database queue on a connection whose own
- * transaction is open writes the job row inside that transaction, so an
- * application rollback takes the job with it while the unique lock stays
- * until it expires (an hour); the sweep then queues the row again.
+ * What remains by design, and the fourth review confirmed: a database queue
+ * on a connection whose own transaction is open writes the job row inside
+ * that transaction, so an application rollback takes the job with it while
+ * the unique lock stays until it expires (an hour); the first sweep after
+ * that queues the row again. The second test pins exactly that.
  */
 #[CoversClass(DeliverNotification::class)]
 #[CoversClass(DatabaseNotificationOutbox::class)]
@@ -139,6 +140,50 @@ final class AdversarialReview3Test extends TestCase
         self::assertSame(1, $application->table(self::JOBS)->count(), 'and that job holds the lock');
         $application->commit();
         self::assertSame(1, $application->table(self::JOBS)->count());
+    }
+
+    /**
+     * Review 4's probe. The job row written through the application connection
+     * goes with that connection's rollback; the notification stays committed
+     * on the storage connection; sweeps are refused by the lock the lost job
+     * left until it expires, and the first sweep after that queues the row.
+     * A delay of up to the lock lifetime plus the sweep interval, not a loss.
+     */
+    public function testAnApplicationRollbackDelaysTheRowUntilTheLockExpires(): void
+    {
+        $app = $this->app();
+        $application = $this->application();
+        $storage = $this->storage();
+        $outbox = $this->outbox();
+        $now = $app->make(ClockInterface::class)->now();
+        $this->travelTo($now);
+
+        $application->beginTransaction();
+        $storage->transaction(static function () use ($outbox, $now): void {
+            $outbox->enqueue(new OutboundNotification(new Iri(self::PARTNER), new Notification(NotificationEventType::LogisticsObjectCreated), $now, 'rolled-back-job'));
+        });
+        [$id] = $outbox->due($now, 1);
+        self::assertSame(1, $application->table(self::JOBS)->count(), 'the job row sits inside the application transaction');
+        $application->rollBack();
+        self::assertSame(0, $application->table(self::JOBS)->count(), 'and goes with its rollback');
+        self::assertSame('rolled-back-job', $outbox->find($id)?->outbound->id, 'the notification itself is committed');
+
+        $this->sweep();
+        self::assertSame(0, $application->table(self::JOBS)->count(), 'the lock the lost job left refuses the sweep');
+        $this->travelTo($now->modify('+3599 seconds'));
+        $this->sweep();
+        self::assertSame(0, $application->table(self::JOBS)->count(), 'still, just before the lock expires');
+        $this->travelTo($now->modify('+3601 seconds'));
+        $this->sweep();
+        self::assertSame(1, $application->table(self::JOBS)->count(), 'the first sweep after the lock expired queues the row');
+        self::assertSame([$id], $outbox->due($now->modify('+3601 seconds'), 1), 'the row waits for that job');
+    }
+
+    private function sweep(): void
+    {
+        $sweep = $this->artisan('one-record:outbox:deliver');
+        self::assertInstanceOf(PendingCommand::class, $sweep);
+        $sweep->assertSuccessful()->run();
     }
 
     private function application(): Connection

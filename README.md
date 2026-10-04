@@ -295,6 +295,17 @@ the `Idempotency-Key` header). The job is unique per row until a worker starts
 it, so sweeps while workers lag do not pile up jobs; the row's lease, not the
 queue, decides who delivers.
 
+One delay to know about with the `database` queue driver: the job is queued
+as soon as the notification's own transaction commits, but if your queue
+table lives on a connection that has a transaction of its own open at that
+moment, the job row is written inside that transaction and a later rollback
+takes it with it. The notification stays in the outbox, and the lock the lost
+job left keeps sweeps from queuing it again for up to an hour; the first sweep
+after that does. Nothing is lost, delivery is delayed by up to that hour plus
+your sweep interval. If that is too long, put the queue on a connection the
+application does not open transactions on, or use a queue driver outside the
+database.
+
 You bind the deliverer, because only your application knows where each
 partner's `/notifications` endpoint is and which credentials to use:
 

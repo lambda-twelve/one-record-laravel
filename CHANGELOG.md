@@ -54,6 +54,11 @@ and `OutboxDeliveryTest`:
   `LogisticsObjectCreated` before the fan-out); it now enqueues inside a
   transaction, checks the row and the absence of a job, rolls back and checks
   both are gone.
+- The fourth review confirmed the remaining limitation and asked for it in
+  the operator documentation: with the `database` queue driver on a
+  connection that has its own transaction open, an application rollback takes
+  the just-queued job with it and the unique lock delays the next queuing by
+  up to an hour. The README's outbox section says so; a test pins it.
 
 Findings of the second adversarial review (2026-10-04, against the fixes
 below), kept as regression tests in `tests/Feature/AdversarialReview2Test.php`:
