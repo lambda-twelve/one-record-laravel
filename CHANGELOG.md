@@ -6,6 +6,26 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.0.0-beta1] - 2026-10-04
+
+First release: the Laravel host for `lambda-twelve/one-record` 1.0.0-beta3.
+The provider wires the SDK's server, PHP API and token endpoint into the
+container, routes and console; the database stores pass the SDK's shipped
+contracts on SQLite, MariaDB and PostgreSQL; the outbox delivers through the
+host's queue; and four independent adversarial review rounds of this package
+are folded in, each with its reproduction probes kept as regression tests.
+Public API changes remain possible between betas and are recorded here.
+
+Not in this beta: a default `NotificationDeliverer` (the SDK's client now
+exists, so it is the first thing after this); more than one data holder per
+application. Delivery is at least once, and with the `database` queue driver
+an application rollback can delay a notification by up to an hour (see the
+README's outbox section). Not yet exercised anywhere: a queue worker against a
+real partner, production load, and interoperability of this host with another
+ONE Record server.
+
 ### Changed
 
 - The SDK is required from Packagist as `lambda-twelve/one-record:^1.0.0-beta3`.
