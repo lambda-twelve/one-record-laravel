@@ -6,10 +6,12 @@ namespace LambdaTwelve\OneRecord\Laravel\Tests\Feature;
 
 use Illuminate\Bus\UniqueLock;
 use Illuminate\Contracts\Cache\Repository as Cache;
+use Illuminate\Database\ConnectionInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Testing\PendingCommand;
+use LambdaTwelve\OneRecord\Api\Notification;
 use LambdaTwelve\OneRecord\Api\NotificationEventType;
 use LambdaTwelve\OneRecord\Api\Subscription;
 use LambdaTwelve\OneRecord\Api\SubscriptionEventType;
@@ -34,6 +36,7 @@ use LambdaTwelve\OneRecord\Rdf\Iri;
 use LambdaTwelve\OneRecord\Server\DataHolder;
 use LambdaTwelve\OneRecord\Server\ServerConfig;
 use LambdaTwelve\OneRecord\Server\Spi\NotificationOutbox;
+use LambdaTwelve\OneRecord\Server\Spi\OutboundNotification;
 use LambdaTwelve\OneRecord\Vocabulary\Generated\Cargo;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Psr\Clock\ClockInterface;
@@ -115,22 +118,32 @@ final class OutboxDeliveryTest extends TestCase
         Bus::assertDispatched(DeliverNotification::class, static fn(DeliverNotification $job): bool => $job->outboxId === $id);
     }
 
+    /**
+     * The outbox hands the row to the dispatcher only once the enqueuing
+     * transaction has committed; a transaction that rolls back after the
+     * enqueue discards that callback with the row (AR3-002: the enqueue
+     * itself has to happen for this to mean anything).
+     */
     public function testARolledBackEnqueueQueuesNoJob(): void
     {
         Bus::fake();
-        $holder = $this->app()->make(DataHolder::class);
-        $holder->subscribe(new Subscription(new Iri(self::PARTNER), TopicType::Type, Cargo::Piece, [SubscriptionEventType::LogisticsObjectCreated]));
-        $this->app()->make(\Illuminate\Contracts\Events\Dispatcher::class)->listen(\LambdaTwelve\OneRecord\Server\Event\LogisticsObjectCreated::class, static function (): void {
-            throw new RuntimeException('listener failed after the fan-out enqueued');
-        });
+        $outbox = $this->outbox();
+        $now = $this->app()->make(ClockInterface::class)->now();
 
+        // The closure always throws (PHPStan knows, so no fail() after the call); the catch checks it was ours.
         try {
-            $holder->create(ObjectBuilder::of(Cargo::Piece)->set(Cargo::goodsDescription, 'Flowers')->build($this->app()->make(ServerConfig::class)->logisticsObjectIri('piece-1')));
-            self::fail('the listener failure propagates');
-        } catch (RuntimeException) {
+            $this->app()->make(ConnectionInterface::class)->transaction(static function () use ($outbox, $now): void {
+                $outbox->enqueue(new OutboundNotification(new Iri(self::PARTNER), new Notification(NotificationEventType::LogisticsObjectCreated), $now, 'rolled-back'));
+                self::assertCount(1, $outbox->due($now, 10), 'the row is in, inside the transaction');
+                Bus::assertNothingDispatched();
+
+                throw new RuntimeException('roll back after the enqueue');
+            });
+        } catch (RuntimeException $e) {
+            self::assertSame('roll back after the enqueue', $e->getMessage());
         }
 
-        self::assertSame([], $this->outbox()->due($this->app()->make(ClockInterface::class)->now(), 10), 'the row went with the unit of work');
+        self::assertSame([], $outbox->due($now, 10), 'the row went with the transaction');
         Bus::assertNothingDispatched();
     }
 

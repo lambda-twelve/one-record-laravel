@@ -145,11 +145,17 @@ final class DeliverNotification implements ShouldQueue, ShouldBeUniqueUntilProce
     }
 
     /**
-     * A job for a row, on the configured connection and queue.
+     * A job for a row, on the configured connection and queue. Commit timing
+     * is the outbox's (it calls dispatchFor() once the enqueuing transaction
+     * has committed), so the job says beforeCommit() explicitly: a queue
+     * connection configured with after_commit would otherwise defer the
+     * submission again, to the commit of whatever other transaction the
+     * application has open, past the point where dispatchFor() can give the
+     * unique lock back if that submission fails (AR3-001).
      */
     public static function forRow(int $outboxId, Repository $config): self
     {
-        $job = new self($outboxId);
+        $job = (new self($outboxId))->beforeCommit();
         $connection = $config->get('one-record.outbox.connection');
         $queue = $config->get('one-record.outbox.queue');
         if (\is_string($connection) && $connection !== '') {

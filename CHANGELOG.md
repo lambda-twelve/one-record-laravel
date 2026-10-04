@@ -41,6 +41,20 @@ All notable changes to this package are documented here. The format follows
 
 ### Fixed
 
+Findings of the third adversarial review (2026-10-04, against the fixes
+below), kept as regression tests in `tests/Feature/AdversarialReview3Test.php`
+and `OutboxDeliveryTest`:
+
+- A queue connection configured with `after_commit` deferred the delivery
+  job's submission to the commit of whatever other transaction the
+  application had open, past the point where a failed submission could give
+  the unique-job lock back. The job now says `beforeCommit()` explicitly;
+  the outbox already waits for the enqueuing transaction itself.
+- The rollback test never reached the enqueue (the SDK dispatches
+  `LogisticsObjectCreated` before the fan-out); it now enqueues inside a
+  transaction, checks the row and the absence of a job, rolls back and checks
+  both are gone.
+
 Findings of the second adversarial review (2026-10-04, against the fixes
 below), kept as regression tests in `tests/Feature/AdversarialReview2Test.php`:
 
