@@ -142,6 +142,7 @@ return new class extends Migration {
             $table->longText('document');
             $table->dateTime('created_at', 6);
             $table->unsignedSmallInteger('attempts')->default(0);
+            $table->char('lease_token', 32)->nullable();   // the claim that may record this attempt's outcome
             $table->dateTime('next_attempt_at', 6)->nullable();
             $table->dateTime('delivered_at', 6)->nullable();
             $table->dateTime('failed_at', 6)->nullable();

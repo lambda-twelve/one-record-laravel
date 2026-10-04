@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace LambdaTwelve\OneRecord\Laravel\Tests\Feature;
 
+use Illuminate\Bus\UniqueLock;
+use Illuminate\Contracts\Cache\Repository as Cache;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Event;
@@ -80,6 +82,16 @@ final class OutboxDeliveryTest extends TestCase
         return $ids[0];
     }
 
+    /**
+     * What a queue worker does with the job: release the unique lock its
+     * dispatch took (the job is unique until processing), then run it.
+     */
+    private function process(int $id): void
+    {
+        (new UniqueLock($this->app()->make(Cache::class)))->release(new DeliverNotification($id));
+        (new DeliverNotification($id))->handle($this->app());
+    }
+
     private function outbox(): DatabaseNotificationOutbox
     {
         $outbox = $this->app()->make(NotificationOutbox::class);
@@ -118,14 +130,14 @@ final class OutboxDeliveryTest extends TestCase
         Event::fake([NotificationDelivered::class]);
         $id = $this->publishWithSubscriber();
 
-        (new DeliverNotification($id))->handle($this->app());
+        $this->process($id);
 
         self::assertCount(1, $this->deliverer->delivered);
         self::assertSame($id, $this->deliverer->delivered[0]->id);
         self::assertSame([], $this->outbox()->due($this->app()->make(ClockInterface::class)->now()->modify('+1 day'), 10));
         Event::assertDispatched(NotificationDelivered::class);
 
-        (new DeliverNotification($id))->handle($this->app());
+        $this->process($id);
         self::assertCount(1, $this->deliverer->delivered, 'a delivered row is never delivered twice');
     }
 
@@ -137,7 +149,7 @@ final class OutboxDeliveryTest extends TestCase
         $this->deliverer->failWith(new DeliveryFailed('connection refused'));
         $now = $this->app()->make(ClockInterface::class)->now();
 
-        (new DeliverNotification($id))->handle($this->app());
+        $this->process($id);
 
         self::assertSame([], $this->deliverer->delivered);
         self::assertSame(1, $this->outbox()->find($id)?->attempts);
@@ -149,7 +161,7 @@ final class OutboxDeliveryTest extends TestCase
         // Second attempt, once due: a longer wait.
         $this->travelTo($now->modify('+2 minutes'));
         $this->deliverer->failWith(new DeliveryFailed('still down'));
-        (new DeliverNotification($id))->handle($this->app());
+        $this->process($id);
         self::assertSame(2, $this->outbox()->find($id)?->attempts);
         self::assertSame([], $this->outbox()->due($now->modify('+2 minutes')->modify('+299 seconds'), 10));
         self::assertSame([$id], $this->outbox()->due($now->modify('+2 minutes')->modify('+301 seconds'), 10));
@@ -163,7 +175,7 @@ final class OutboxDeliveryTest extends TestCase
         $id = $this->publishWithSubscriber();
         $this->deliverer->failWith(new DeliveryFailed('connection refused'));
 
-        (new DeliverNotification($id))->handle($this->app());
+        $this->process($id);
 
         self::assertSame([], $this->outbox()->due($this->app()->make(ClockInterface::class)->now()->modify('+10 days'), 10), 'a given-up row is no longer due');
         Bus::assertDispatchedTimes(DeliverNotification::class, 1);
@@ -177,7 +189,7 @@ final class OutboxDeliveryTest extends TestCase
         $id = $this->publishWithSubscriber();
         $this->deliverer->failWith(new DeliveryRejected('no endpoint for recipient'));
 
-        (new DeliverNotification($id))->handle($this->app());
+        $this->process($id);
 
         self::assertSame([], $this->outbox()->due($this->app()->make(ClockInterface::class)->now()->modify('+10 days'), 10));
         Bus::assertDispatchedTimes(DeliverNotification::class, 1);
@@ -194,9 +206,9 @@ final class OutboxDeliveryTest extends TestCase
     {
         Bus::fake();
         $id = $this->publishWithSubscriber();
-        self::assertTrue($this->outbox()->claim($id, $this->app()->make(ClockInterface::class)->now(), 120));
+        self::assertNotNull($this->outbox()->claim($id, $this->app()->make(ClockInterface::class)->now(), 120));
 
-        (new DeliverNotification($id))->handle($this->app());
+        $this->process($id);
 
         self::assertSame([], $this->deliverer->delivered);
     }
@@ -209,7 +221,8 @@ final class OutboxDeliveryTest extends TestCase
         $dispatch = $this->artisan('one-record:outbox:deliver');
         self::assertInstanceOf(PendingCommand::class, $dispatch);
         $dispatch->assertSuccessful()->run();
-        Bus::assertDispatchedTimes(DeliverNotification::class, 2);
+        // The job queued by the fan-out still holds the row's unique lock: a sweep queues no second one.
+        Bus::assertDispatchedTimes(DeliverNotification::class, 1);
 
         $inline = $this->artisan('one-record:outbox:deliver', ['--inline' => true]);
         self::assertInstanceOf(PendingCommand::class, $inline);
@@ -231,7 +244,7 @@ final class OutboxDeliveryTest extends TestCase
         $logger = new TestLogger();
         $this->app()->instance(OneRecordServiceProvider::LOGGER, $logger);
 
-        (new DeliverNotification($id))->handle($this->app());
+        $this->process($id);
 
         self::assertSame([$id], $this->outbox()->due($this->app()->make(ClockInterface::class)->now(), 10), 'still due, nothing lost');
         self::assertCount(1, $logger->records);

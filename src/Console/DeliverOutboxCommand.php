@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace LambdaTwelve\OneRecord\Laravel\Console;
 
 use Illuminate\Console\Command;
-use Illuminate\Contracts\Bus\Dispatcher as Bus;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Container\Container;
 use LambdaTwelve\OneRecord\Laravel\Notifications\DeliverNotification;
@@ -27,7 +26,7 @@ final class DeliverOutboxCommand extends Command
 
     protected $description = 'Deliver due ONE Record notifications from the outbox';
 
-    public function handle(Container $app, NotificationOutbox $outbox, ClockInterface $clock, Repository $config, Bus $bus): int
+    public function handle(Container $app, NotificationOutbox $outbox, ClockInterface $clock, Repository $config): int
     {
         if (!$outbox instanceof DatabaseNotificationOutbox) {
             $this->components->error('The outbox lives in the database; set one-record.storage.driver to "database".');
@@ -42,7 +41,7 @@ final class DeliverOutboxCommand extends Command
             if ($inline) {
                 (new DeliverNotification($id))->handle($app);
             } else {
-                $bus->dispatch(DeliverNotification::forRow($id, $config));
+                DeliverNotification::dispatchFor($id, $config);
             }
         }
         $this->components->info(\sprintf('%d due notification(s) %s.', \count($ids), $inline ? 'processed' : 'dispatched'));

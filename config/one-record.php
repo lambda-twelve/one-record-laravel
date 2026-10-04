@@ -64,8 +64,10 @@ return [
     |
     | database: the package's tables on the given connection (null = default).
     | array:    the SDK's in-memory stores, one set per process; only for tests.
-    | transactions wraps every request the server handles in a database
-    | transaction and rolls back when the server answers 5xx.
+    | With the database driver the SDK's unit of work runs on that connection,
+    | so every operation (a mutating request, a DataHolder call) is one
+    | transaction. transactions additionally wraps each whole request in one:
+    | reads see one snapshot, and a 5xx answer rolls everything back.
     |
     */
     'storage' => [
@@ -145,6 +147,8 @@ return [
     |
     | dispatch = queue pushes a delivery job after the enqueuing transaction
     | commits; none leaves delivery to `one-record:outbox:deliver` (cron).
+    | A worker leases a row for lease_seconds; delivery is at least once, so
+    | recipients deduplicate on the notification id (the Idempotency-Key).
     |
     */
     'outbox' => [

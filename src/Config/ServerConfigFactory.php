@@ -71,7 +71,10 @@ final class ServerConfigFactory
         return strtolower($parts['scheme']) . '://' . $parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : '');
     }
 
-    private static function basePath(mixed $value): string
+    /**
+     * The mounted prefix as the SDK sees it: no trailing slash, a leading one unless empty.
+     */
+    public static function basePath(mixed $value): string
     {
         if (!\is_string($value)) {
             throw new InvalidArgumentException('one-record.server.base_path must be a string such as "/one-record" (or empty for the root).');

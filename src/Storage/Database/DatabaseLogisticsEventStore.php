@@ -33,6 +33,9 @@ final class DatabaseLogisticsEventStore implements LogisticsEventStore
 {
     use Transactions;
 
+    /** Rows hydrated at a time while a code filter is paged in PHP. */
+    private const int CHUNK = 200;
+
     public function __construct(
         private readonly ConnectionInterface $db,
         private readonly Tables $tables,
@@ -104,25 +107,65 @@ final class DatabaseLogisticsEventStore implements LogisticsEventStore
         $key = str_ends_with($query->sort, 'eventDate') ? 'COALESCE(event_date, created_at)' : 'COALESCE(creation_date, created_at)';
         $q->orderByRaw($key . ' ' . $direction)->orderBy('iri', $direction);
 
-        $pageInSql = $query->eventCodes === [] && $query->limit !== null;
-        if ($pageInSql) {
-            $q->offset($query->skip)->limit($query->limit);
-        }
-
-        $events = array_map($this->hydrate(...), Row::all($q));
         if ($query->eventCodes !== []) {
-            $events = array_values(array_filter($events, static function (LogisticsEvent $event) use ($query): bool {
-                foreach ($query->eventCodes as $code) {
-                    if ($event->matchesCode($code)) {
-                        return true;
-                    }
-                }
-
-                return false;
-            }));
+            return $this->pageMatchingCodes($q, $query);
+        }
+        if ($query->skip > 0) {
+            // SQLite and MySQL accept OFFSET only after a LIMIT; "no limit" is spelled as the largest one.
+            $q->offset($query->skip)->limit($query->limit ?? PHP_INT_MAX);
+        } elseif ($query->limit !== null) {
+            $q->limit($query->limit);
         }
 
-        return $pageInSql ? $events : \array_slice($events, $query->skip, $query->limit);
+        return array_map($this->hydrate(...), Row::all($q));
+    }
+
+    /**
+     * Code matching finishes in PHP, so the page is found by walking the
+     * pre-filtered, ordered rows in bounded chunks until skip and limit are
+     * satisfied: a small page over a long history costs a chunk, not the
+     * whole history, in memory.
+     *
+     * @return list<LogisticsEvent>
+     */
+    private function pageMatchingCodes(Builder $q, EventQuery $query): array
+    {
+        $page = [];
+        $matched = 0;
+        $offset = 0;
+        do {
+            $rows = Row::all((clone $q)->offset($offset)->limit(self::CHUNK));
+            foreach ($rows as $row) {
+                $event = $this->hydrate($row);
+                if (!self::matchesAny($event, $query->eventCodes)) {
+                    continue;
+                }
+                if ($matched++ < $query->skip) {
+                    continue;
+                }
+                $page[] = $event;
+                if ($query->limit !== null && \count($page) >= $query->limit) {
+                    return $page;
+                }
+            }
+            $offset += self::CHUNK;
+        } while (\count($rows) === self::CHUNK);
+
+        return $page;
+    }
+
+    /**
+     * @param list<string> $codes
+     */
+    private static function matchesAny(LogisticsEvent $event, array $codes): bool
+    {
+        foreach ($codes as $code) {
+            if ($event->matchesCode($code)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function lastModified(Iri $logisticsObject): ?DateTimeImmutable

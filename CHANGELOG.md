@@ -19,8 +19,54 @@ All notable changes to this package are documented here. The format follows
   Testbench in `tests/Contract/Sdk`. The mirrored object-store and outbox
   traits are gone; the remaining host traits keep only the behaviour the
   SDK's contracts leave open.
+- The SDK's `UnitOfWork` is bound to the storage connection
+  (`DatabaseUnitOfWork`), so every mutating request and every `DataHolder` /
+  `ActionRequests` operation is one transaction and nested calls are
+  savepoints. `storage.transactions` now only adds the request-wide
+  envelope. `DB::transaction()` around your own `DataHolder` calls is no
+  longer needed.
+- Outbox outcomes are recorded under a lease: `claim()` returns a `Lease`
+  (token plus the row as claimed, attempt count included) or null, and
+  `markDelivered()`, `markRetry()` and `markFailed()` take the lease and
+  return whether it still held. The outbox table gains `lease_token`.
+- `DeliverNotification` is unique per row until processing starts
+  (`ShouldBeUniqueUntilProcessing`, an hour at most) and is always queued
+  through `DeliverNotification::dispatchFor()`, which takes that lock.
 
 ### Fixed
+
+Findings of the adversarial review of 2026-10-04, each kept as a regression
+test in `tests/Feature/AdversarialReviewTest.php` and
+`tests/Feature/FreshInstallTest.php`:
+
+- An action-request decision that lost the status race to a competing
+  decision answered 409 but left the grants it had written committed, so the
+  partner was allowed in; and a `DataHolder` operation interrupted by a
+  throwing listener stayed half persisted. The unit of work above unwinds
+  both.
+- A worker whose lease had expired could still record a permanent failure
+  over the retry the worker now holding the row had scheduled, leaving the
+  row undeliverable for good. Outcomes now require the lease token, and the
+  attempt count comes from the claim rather than an earlier unlocked read.
+- A freshly installed application did not boot: mounting the routes
+  resolved the complete `ServerConfig`, which refuses the unset data holder,
+  before the operator could publish the configuration or run `artisan`.
+  Routes now read only the base path; the server identity is validated when
+  the server is first needed.
+- Verifying an unknown client id made a throwaway hash and then checked it,
+  one hash operation more than a known id, per PHP process. The throwaway
+  hash is now made with the configured hasher independently of the id and
+  kept in the package cache; both paths do one check.
+- The delivery job's `ShouldBeUnique` was ineffective because it was
+  dispatched through the bus contract, which never takes the unique lock;
+  repeated sweeps queued the same row again while workers lagged.
+- Warnings raised from test code were hidden by `restrictWarnings` in the
+  PHPUnit configuration, and the manifest test still iterated the removed
+  `repositories` key. Warnings anywhere now fail the run.
+- The README's authorisation example checked for `InMemoryAccessPolicy`
+  while the provider binds `GrantAccessPolicy`, so its grant never ran.
+- Code-filtered event queries hydrated every candidate row before paging;
+  they now walk the ordered rows in chunks of 200 until the page is full.
 
 - Appending a logistics event whose IRI already exists raises the SDK's
   `StoreException` (`ALREADY_EXISTS`) from the database store, as the SPI

@@ -7,6 +7,7 @@ namespace LambdaTwelve\OneRecord\Laravel\Storage\Database;
 use Closure;
 use DateTimeImmutable;
 use Illuminate\Database\ConnectionInterface;
+use Illuminate\Database\Query\Builder;
 use LambdaTwelve\OneRecord\Api\Notification;
 use LambdaTwelve\OneRecord\JsonLd\Json;
 use LambdaTwelve\OneRecord\Laravel\Support\IriHash;
@@ -21,7 +22,9 @@ use LambdaTwelve\OneRecord\Server\Spi\OutboundNotification;
  * reports was committed. Everything beyond enqueue() is the host side of the
  * contract: finding due rows, leasing one to a worker, recording the outcome.
  * Retry state lives here rather than in the queue so a lost job can never
- * lose a notification.
+ * lose a notification. Delivery is at least once: a lease that expires while
+ * a worker is still delivering lets another worker deliver again, and the
+ * recipient deduplicates on the notification id (the Idempotency-Key).
  */
 final class DatabaseNotificationOutbox implements NotificationOutbox
 {
@@ -83,31 +86,48 @@ final class DatabaseNotificationOutbox implements NotificationOutbox
     /**
      * Takes a lease on a due row by pushing its next attempt into the future;
      * exactly one worker wins because the UPDATE is conditioned on the row
-     * still being due.
+     * still being due. The lease carries a fresh token and the row as it is
+     * under that token, attempt count included.
      */
-    public function claim(int $id, DateTimeImmutable $now, int $leaseSeconds): bool
+    public function claim(int $id, DateTimeImmutable $now, int $leaseSeconds): ?Lease
     {
-        return $this->db->table($this->tables->outbox())
+        $token = bin2hex(random_bytes(16));
+        $claimed = $this->db->table($this->tables->outbox())
             ->where('id', $id)
             ->whereNull('delivered_at')
             ->whereNull('failed_at')
             ->where('next_attempt_at', '<=', Timestamps::toDb($now))
-            ->update(['next_attempt_at' => Timestamps::toDb($now->modify('+' . $leaseSeconds . ' seconds')), 'attempts' => $this->db->raw('attempts + 1')]) === 1;
+            ->update([
+                'next_attempt_at' => Timestamps::toDb($now->modify('+' . $leaseSeconds . ' seconds')),
+                'attempts' => $this->db->raw('attempts + 1'),
+                'lease_token' => $token,
+            ]) === 1;
+        if (!$claimed) {
+            return null;
+        }
+        $row = Row::first($this->owned($id, $token));
+
+        return $row === null ? null : new Lease($token, $this->hydrate($row));
     }
 
-    public function markDelivered(int $id, DateTimeImmutable $at): void
+    /**
+     * Outcomes are recorded under the lease that was held while delivering:
+     * each returns false, and changes nothing, when the lease has since
+     * expired and another worker holds the row (R-002).
+     */
+    public function markDelivered(Lease $lease, DateTimeImmutable $at): bool
     {
-        $this->db->table($this->tables->outbox())->where('id', $id)->update(['delivered_at' => Timestamps::toDb($at), 'last_error' => null]);
+        return $this->owned($lease->pending->id, $lease->token)->update(['delivered_at' => Timestamps::toDb($at), 'last_error' => null, 'lease_token' => null]) === 1;
     }
 
-    public function markRetry(int $id, DateTimeImmutable $next, string $error): void
+    public function markRetry(Lease $lease, DateTimeImmutable $next, string $error): bool
     {
-        $this->db->table($this->tables->outbox())->where('id', $id)->update(['next_attempt_at' => Timestamps::toDb($next), 'last_error' => $error]);
+        return $this->owned($lease->pending->id, $lease->token)->update(['next_attempt_at' => Timestamps::toDb($next), 'last_error' => $error, 'lease_token' => null]) === 1;
     }
 
-    public function markFailed(int $id, DateTimeImmutable $at, string $error): void
+    public function markFailed(Lease $lease, DateTimeImmutable $at, string $error): bool
     {
-        $this->db->table($this->tables->outbox())->where('id', $id)->update(['failed_at' => Timestamps::toDb($at), 'last_error' => $error]);
+        return $this->owned($lease->pending->id, $lease->token)->update(['failed_at' => Timestamps::toDb($at), 'last_error' => $error, 'lease_token' => null]) === 1;
     }
 
     /**
@@ -118,7 +138,7 @@ final class DatabaseNotificationOutbox implements NotificationOutbox
         return $this->db->table($this->tables->outbox())
             ->where('id', $id)
             ->whereNotNull('failed_at')
-            ->update(['failed_at' => null, 'attempts' => 0, 'next_attempt_at' => Timestamps::toDb($now), 'last_error' => null]) === 1;
+            ->update(['failed_at' => null, 'attempts' => 0, 'next_attempt_at' => Timestamps::toDb($now), 'last_error' => null, 'lease_token' => null]) === 1;
     }
 
     /**
@@ -130,6 +150,11 @@ final class DatabaseNotificationOutbox implements NotificationOutbox
         $failed = $this->db->table($this->tables->outbox())->whereNotNull('failed_at')->where('failed_at', '<', Timestamps::toDb($failedBefore))->delete();
 
         return $delivered + $failed;
+    }
+
+    private function owned(int $id, string $token): Builder
+    {
+        return $this->db->table($this->tables->outbox())->where('id', $id)->where('lease_token', $token);
     }
 
     /**

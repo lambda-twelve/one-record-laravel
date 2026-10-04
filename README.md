@@ -90,7 +90,7 @@ package keeps no configuration model of its own.
 | `server.languages`, `max_body_bytes`, `embedded_depth`, `bulk_logistics_events` | | Passed straight to the SDK's `ServerConfig`. |
 | `routes.register`, `middleware`, `domain`, `name` | | Automatic route registration, or leave it to your routes file (below). |
 | `storage.driver` | `ONE_RECORD_STORAGE` | `database` (default) or `array` (the SDK's in-memory stores, one set per process; tests only). |
-| `storage.connection`, `table_prefix`, `migrations`, `transactions` | `ONE_RECORD_DB_CONNECTION` | Which connection, the `one_record_` prefix, whether the package loads its migrations, and whether each request runs in a transaction. |
+| `storage.connection`, `table_prefix`, `migrations`, `transactions` | `ONE_RECORD_DB_CONNECTION` | Which connection, the `one_record_` prefix, whether the package loads its migrations, and whether each whole request runs in one transaction on top of the SDK's unit of work. |
 | `policy.denial`, `policy.internal_agents` | `ONE_RECORD_DENIAL` | `forbid` (403) or `hide` (404) for refused partners; agents allowed to do everything. The data holder is always internal. |
 | `auth.*` | `ONE_RECORD_AUTH`, `ONE_RECORD_AUDIENCE`, `ONE_RECORD_ISSUER`, `ONE_RECORD_PRIVATE_KEY`, `ONE_RECORD_KEY_ID`, `ONE_RECORD_TOKEN_ENDPOINT`, `ONE_RECORD_JWKS` | Partner authentication and this host's token endpoint (below). |
 | `cache.store`, `log.channel`, `http` | `ONE_RECORD_CACHE_STORE`, `ONE_RECORD_LOG_CHANNEL` | The cache store the SDK caches in (JWKS documents, tokens), the log channel it logs to, Guzzle options. |
@@ -120,7 +120,7 @@ use LambdaTwelve\OneRecord\Api\Permission;
 use LambdaTwelve\OneRecord\Model\Builder\ObjectBuilder;
 use LambdaTwelve\OneRecord\Rdf\Iri;
 use LambdaTwelve\OneRecord\Server\DataHolder;
-use LambdaTwelve\OneRecord\Server\InMemory\InMemoryAccessPolicy;
+use LambdaTwelve\OneRecord\Server\GrantAccessPolicy;
 use LambdaTwelve\OneRecord\Server\ServerConfig;
 use LambdaTwelve\OneRecord\Server\Spi\AccessPolicy;
 use LambdaTwelve\OneRecord\Vocabulary\Generated\Cargo;
@@ -132,20 +132,24 @@ $piece = ObjectBuilder::of(Cargo::Piece)
     ->set(Cargo::goodsDescription, 'Perishables')
     ->build($config->logisticsObjectIri('piece-1'));
 
-DB::transaction(fn () => $holder->create($piece));
+$holder->create($piece);
 
-// Let a partner read it (the default policy is the SDK's grant-based one).
+// Let a partner read it: the default policy is the SDK's grant-based one, and
+// with the database driver its grants live in one_record_grants.
 $policy = app(AccessPolicy::class);
-if ($policy instanceof InMemoryAccessPolicy) {
+if ($policy instanceof GrantAccessPolicy) {
     $policy->allow(new Iri('https://partner.example/logistics-objects/partner'), $piece->iri, [Permission::GetLogisticsObject]);
 }
 ```
 
 `DataHolder::publish()` resolves a whole local graph, `update()` diffs and
 applies a change, `accept()` / `reject()` decide partners' change requests;
-see the SDK's documentation for the PHP API. Wrap your own `DataHolder`
-calls in `DB::transaction()`: the SDK writes several rows per operation and
-only the HTTP side is wrapped for you.
+see the SDK's documentation for the PHP API. Every such operation runs in the
+SDK's unit of work, which this package binds to the storage connection
+(`DatabaseUnitOfWork`): the rows it writes stand or fall together, and a
+listener that throws rolls them back, with no `DB::transaction()` of your own.
+To commit several operations together, wrap them in one; the nested units
+become savepoints.
 
 ## Routes
 
@@ -165,12 +169,17 @@ itself. The route is `Route::any('{path?}')` inside the group, so an empty
 base path would catch your whole application; use a prefix.
 
 Every request is converted to PSR-7, handled by the SDK's `OneRecordServer`,
-and converted back. With the database driver the whole request runs inside a
-transaction that is rolled back when the SDK answers 5xx; 4xx responses commit
-on purpose (a change that failed to apply is a stored, failed action request).
-Listeners of SDK events run inside that transaction: a listener that throws
-turns the request into a 500 and rolls it back; listeners that do I/O should be
-queued and dispatched after commit.
+and converted back. With the database driver, every mutating request runs in
+the SDK's unit of work on the storage connection, so what one operation
+writes (a revision, its action request, grants, outbox rows) is committed as a
+whole or not at all, and is unwound before an error becomes a response: an
+acceptance that loses the status race to a competing decision answers 409 with
+its grants already rolled back. With `storage.transactions` on (the default)
+the whole request is additionally one transaction, rolled back when the SDK
+answers 5xx; 4xx responses commit on purpose (a change that failed to apply is
+a stored, failed action request). Listeners of SDK events run inside the unit
+of work: a listener that throws turns the request into a 500 and rolls it
+back; listeners that do I/O should be queued and dispatched after commit.
 
 ## Storage
 
@@ -272,10 +281,19 @@ this package's `NotificationDelivered` and `NotificationDeliveryFailed`.
 The SDK enqueues outgoing notifications; delivering them is the host's job.
 Every fan-out writes a row to `one_record_outbox` and, with
 `outbox.dispatch=queue`, dispatches a `DeliverNotification` job after the
-transaction commits. The job leases the row, hands it to your
-`NotificationDeliverer`, and records the outcome: delivered, retry with a
-growing backoff (a minute, five, fifteen, an hour, four, twelve, a day), or
-given up after `outbox.max_attempts`.
+transaction commits. The job leases the row for `outbox.lease_seconds`, hands
+it to your `NotificationDeliverer`, and records the outcome under that lease:
+delivered, retry with a growing backoff (a minute, five, fifteen, an hour,
+four, twelve, a day), or given up after `outbox.max_attempts`. A worker whose
+lease expired while it was still delivering cannot overwrite what the worker
+that took the row over records.
+
+Delivery is **at least once**: a lease that expires mid-delivery lets another
+worker deliver the same notification again, so recipients deduplicate on the
+notification id (`$pending->outbound->id`, which your deliverer should send as
+the `Idempotency-Key` header). The job is unique per row until a worker starts
+it, so sweeps while workers lag do not pile up jobs; the row's lease, not the
+queue, decides who delivers.
 
 You bind the deliverer, because only your application knows where each
 partner's `/notifications` endpoint is and which credentials to use:
@@ -317,7 +335,7 @@ implementation of any of these and the SDK uses it:
 
 `LogisticsObjectStore`, `LogisticsEventStore`, `ActionRequestStore`,
 `SubscriptionStore`, `AccessDelegationStore`, `NotificationOutbox`,
-`Authenticator`, `AccessPolicy` (all `LambdaTwelve\OneRecord\Server\Spi`),
+`UnitOfWork`, `Authenticator`, `AccessPolicy` (all `LambdaTwelve\OneRecord\Server\Spi`),
 `ClientCredentialsVerifier` (`LambdaTwelve\OneRecord\Auth`), `IriMinter`
 (`LambdaTwelve\OneRecord\Model`), and the PSR services `ClockInterface`,
 `EventDispatcherInterface`, `ClientInterface`, the PSR-17 factories. The SDK's

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace LambdaTwelve\OneRecord\Laravel\Console;
 
 use Illuminate\Console\Command;
-use Illuminate\Contracts\Bus\Dispatcher as Bus;
 use Illuminate\Contracts\Config\Repository;
 use LambdaTwelve\OneRecord\Laravel\Notifications\DeliverNotification;
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseNotificationOutbox;
@@ -22,7 +21,7 @@ final class RetryOutboxCommand extends Command
 
     protected $description = 'Retry a ONE Record notification that was given up on';
 
-    public function handle(NotificationOutbox $outbox, ClockInterface $clock, Repository $config, Bus $bus): int
+    public function handle(NotificationOutbox $outbox, ClockInterface $clock, Repository $config): int
     {
         if (!$outbox instanceof DatabaseNotificationOutbox) {
             $this->components->error('The outbox lives in the database; set one-record.storage.driver to "database".');
@@ -36,7 +35,7 @@ final class RetryOutboxCommand extends Command
             return self::INVALID;
         }
         if ($config->get('one-record.outbox.dispatch') === 'queue') {
-            $bus->dispatch(DeliverNotification::forRow((int) $id, $config));
+            DeliverNotification::dispatchFor((int) $id, $config);
         }
         $this->components->info('Notification ' . (int) $id . ' queued again.');
 

@@ -7,10 +7,10 @@ namespace LambdaTwelve\OneRecord\Laravel;
 use Illuminate\Container\Container;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Routing\Router;
+use LambdaTwelve\OneRecord\Laravel\Config\ServerConfigFactory;
 use LambdaTwelve\OneRecord\Laravel\Http\Controllers\JwksController;
 use LambdaTwelve\OneRecord\Laravel\Http\Controllers\ServerController;
 use LambdaTwelve\OneRecord\Laravel\Http\Controllers\TokenController;
-use LambdaTwelve\OneRecord\Server\ServerConfig;
 
 /**
  * Route registration. The server is mounted under ServerConfig::$basePath,
@@ -34,9 +34,12 @@ final class OneRecord
     {
         $app = Container::getInstance();
         $router = $app->make(Router::class);
-        $config = $app->make(ServerConfig::class);
+        // Only the base path is needed here, read as ServerConfig would: resolving the whole validated
+        // ServerConfig at boot would refuse to start a freshly installed application (no data holder
+        // yet) before its operator can publish the configuration or run `artisan`.
+        $basePath = ServerConfigFactory::basePath($app->make(Repository::class)->get('one-record.server.base_path', ''));
 
-        $router->group(self::group($app, $options, $config->basePath), static function (Router $router): void {
+        $router->group(self::group($app, $options, $basePath), static function (Router $router): void {
             $router->any('/{path?}', ServerController::class)->where('path', '.*')->name('server');
         });
         // Routes named after being added are only findable by name once the lookups are rebuilt;

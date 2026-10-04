@@ -29,7 +29,9 @@ use RuntimeException;
 /**
  * A request the SDK answers with 5xx leaves nothing behind. The SDK saves
  * the action request before dispatching ActionRequestCreated, so a listener
- * that throws is exactly the partial-write case the transaction exists for.
+ * that throws is exactly the partial-write case transactions exist for. The
+ * SDK's unit of work, bound to the connection, unwinds the operation whether
+ * or not the request envelope (one-record.storage.transactions) is on.
  */
 #[CoversClass(TransactionalRequestHandler::class)]
 final class TransactionTest extends TestCase
@@ -52,9 +54,9 @@ final class TransactionTest extends TestCase
         $this->assertRowsAfterAFailingListener(transactions: true, expectedRequests: 0);
     }
 
-    public function testWithoutTransactionsThePartialWriteStays(): void
+    public function testTheUnitOfWorkRollsBackWithoutTheRequestEnvelopeToo(): void
     {
-        $this->assertRowsAfterAFailingListener(transactions: false, expectedRequests: 1);
+        $this->assertRowsAfterAFailingListener(transactions: false, expectedRequests: 0);
     }
 
     private function assertRowsAfterAFailingListener(bool $transactions, int $expectedRequests): void

@@ -6,7 +6,6 @@ namespace LambdaTwelve\OneRecord\Laravel;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\HttpFactory;
-use Illuminate\Contracts\Bus\Dispatcher as BusDispatcher;
 use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Container\Container;
@@ -39,6 +38,7 @@ use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseLogisticsEventStore;
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseLogisticsObjectStore;
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseNotificationOutbox;
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseSubscriptionStore;
+use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseUnitOfWork;
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\Tables;
 use LambdaTwelve\OneRecord\Model\IriMinter;
 use LambdaTwelve\OneRecord\Model\UuidIriMinter;
@@ -46,6 +46,7 @@ use LambdaTwelve\OneRecord\Rdf\Iri;
 use LambdaTwelve\OneRecord\Server\ActionRequests;
 use LambdaTwelve\OneRecord\Server\DataHolder;
 use LambdaTwelve\OneRecord\Server\GrantAccessPolicy;
+use LambdaTwelve\OneRecord\Server\IdentityUnitOfWork;
 use LambdaTwelve\OneRecord\Server\InMemory\InMemoryState;
 use LambdaTwelve\OneRecord\Server\OneRecordServer;
 use LambdaTwelve\OneRecord\Server\ServerBuilder;
@@ -60,6 +61,7 @@ use LambdaTwelve\OneRecord\Server\Spi\LogisticsEventStore;
 use LambdaTwelve\OneRecord\Server\Spi\LogisticsObjectStore;
 use LambdaTwelve\OneRecord\Server\Spi\NotificationOutbox;
 use LambdaTwelve\OneRecord\Server\Spi\SubscriptionStore;
+use LambdaTwelve\OneRecord\Server\Spi\UnitOfWork;
 use LogicException;
 use Psr\Clock\ClockInterface;
 use Psr\EventDispatcher\EventDispatcherInterface;
@@ -183,10 +185,15 @@ final class OneRecordServiceProvider extends ServiceProvider
             fn(ConnectionInterface $db, Tables $t): NotificationOutbox => new DatabaseNotificationOutbox($db, $t, $this->config('outbox.dispatch', 'queue') === 'queue'
                 // The job is released only after the enqueuing transaction commits, so it never races the row.
                 ? static function (int $id) use ($app): void {
-                    $app->make(BusDispatcher::class)->dispatch(DeliverNotification::forRow($id, $app->make(Repository::class)));
+                    DeliverNotification::dispatchFor($id, $app->make(Repository::class));
                 }
                 : null),
         ));
+        // The SDK runs every mutating request and every DataHolder / ActionRequests operation through
+        // this, so with the database driver each is one transaction (nested calls are savepoints).
+        $this->app->singleton(UnitOfWork::class, fn(Container $app): UnitOfWork => $this->driver() === 'database'
+            ? new DatabaseUnitOfWork($this->connection($app))
+            : new IdentityUnitOfWork());
 
         $this->app->singleton(AccessPolicy::class, function (Container $app): AccessPolicy {
             // The SDK's grant-based policy works over any AccessDelegationStore; only the
@@ -248,6 +255,7 @@ final class OneRecordServiceProvider extends ServiceProvider
             responses: $app->make(ResponseFactoryInterface::class),
             streams: $app->make(StreamFactoryInterface::class),
             logger: self::logger($app),
+            unitOfWork: $app->make(UnitOfWork::class),
         ));
         $this->app->singleton(OneRecordServer::class, static fn(Container $app): OneRecordServer => ServerBuilder::build($app->make(Services::class)));
         $this->app->singleton(DataHolder::class, static fn(Container $app): DataHolder => new DataHolder($app->make(Services::class)));
@@ -287,7 +295,7 @@ final class OneRecordServiceProvider extends ServiceProvider
             );
         });
         $this->app->singleton(ClientCredentialsVerifier::class, fn(Container $app): ClientCredentialsVerifier => $this->driver() === 'database'
-            ? new DatabaseClientCredentials($this->connection($app), $app->make(Tables::class), $app->make(Hasher::class), $app->make(ClockInterface::class))
+            ? new DatabaseClientCredentials($this->connection($app), $app->make(Tables::class), $app->make(Hasher::class), $app->make(ClockInterface::class), self::cache($app))
             : new InMemoryClientCredentials());
         $this->app->singleton(TokenEndpoint::class, function (Container $app): TokenEndpoint {
             $settings = $this->arrayConfig('auth.token_endpoint');
