@@ -6,16 +6,19 @@ namespace LambdaTwelve\OneRecord\Laravel\Tests\Contract\Sdk;
 
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseAccessDelegationStore;
 use LambdaTwelve\OneRecord\Server\Spi\AccessDelegationStore;
-use LambdaTwelve\OneRecord\Testing\Contract\AccessDelegationStoreContract;
+use LambdaTwelve\OneRecord\Testing\Contract\AccessDelegationStoreContractTests;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 #[CoversClass(DatabaseAccessDelegationStore::class)]
-final class DatabaseAccessDelegationStoreContractTest extends AccessDelegationStoreContract
+final class DatabaseAccessDelegationStoreContractTest extends SdkContractTestCase
 {
-    use UsesTheDatabaseStores;
+    use AccessDelegationStoreContractTests;
 
     protected function createStore(): AccessDelegationStore
     {
-        return new DatabaseAccessDelegationStore($this->connection(), $this->tables());
+        $store = $this->app()->make(AccessDelegationStore::class);
+        self::assertInstanceOf(DatabaseAccessDelegationStore::class, $store);
+
+        return $store;
     }
 }

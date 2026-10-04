@@ -5,19 +5,30 @@ declare(strict_types=1);
 namespace LambdaTwelve\OneRecord\Laravel\Tests\Contract\Sdk;
 
 use DateTimeImmutable;
+use Illuminate\Contracts\Config\Repository;
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseNotificationOutbox;
 use LambdaTwelve\OneRecord\Server\Spi\NotificationOutbox;
-use LambdaTwelve\OneRecord\Testing\Contract\NotificationOutboxContract;
+use LambdaTwelve\OneRecord\Testing\Contract\NotificationOutboxContractTests;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 #[CoversClass(DatabaseNotificationOutbox::class)]
-final class DatabaseNotificationOutboxContractTest extends NotificationOutboxContract
+final class DatabaseNotificationOutboxContractTest extends SdkContractTestCase
 {
-    use UsesTheDatabaseStores;
+    use NotificationOutboxContractTests;
+
+    protected function defineEnvironment($app): void
+    {
+        parent::defineEnvironment($app);
+        // This case is about the store; delivery jobs have their own test.
+        $app->make(Repository::class)->set('one-record.outbox.dispatch', 'none');
+    }
 
     protected function createOutbox(): NotificationOutbox
     {
-        return new DatabaseNotificationOutbox($this->connection(), $this->tables());
+        $outbox = $this->app()->make(NotificationOutbox::class);
+        self::assertInstanceOf(DatabaseNotificationOutbox::class, $outbox);
+
+        return $outbox;
     }
 
     protected function pending(NotificationOutbox $outbox): array

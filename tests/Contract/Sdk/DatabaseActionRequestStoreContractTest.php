@@ -6,16 +6,19 @@ namespace LambdaTwelve\OneRecord\Laravel\Tests\Contract\Sdk;
 
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseActionRequestStore;
 use LambdaTwelve\OneRecord\Server\Spi\ActionRequestStore;
-use LambdaTwelve\OneRecord\Testing\Contract\ActionRequestStoreContract;
+use LambdaTwelve\OneRecord\Testing\Contract\ActionRequestStoreContractTests;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 #[CoversClass(DatabaseActionRequestStore::class)]
-final class DatabaseActionRequestStoreContractTest extends ActionRequestStoreContract
+final class DatabaseActionRequestStoreContractTest extends SdkContractTestCase
 {
-    use UsesTheDatabaseStores;
+    use ActionRequestStoreContractTests;
 
     protected function createStore(): ActionRequestStore
     {
-        return new DatabaseActionRequestStore($this->connection(), $this->tables());
+        $store = $this->app()->make(ActionRequestStore::class);
+        self::assertInstanceOf(DatabaseActionRequestStore::class, $store);
+
+        return $store;
     }
 }

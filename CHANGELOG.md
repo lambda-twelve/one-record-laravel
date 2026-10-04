@@ -8,15 +8,17 @@ All notable changes to this package are documented here. The format follows
 
 ### Changed
 
-- The SDK is required from Packagist as `lambda-twelve/one-record:^1.0@beta`.
+- The SDK is required from Packagist as `lambda-twelve/one-record:^1.0.0-beta2`.
   The path repository, the sibling checkout in CI and the DDEV mount are gone.
   Applications must allow the pre-release themselves, since Composer reads
   stability flags from the root `composer.json` only:
-  `composer require "lambda-twelve/one-record:^1.0@beta"`.
-- The SDK's shipped store contracts (`LambdaTwelve\OneRecord\Testing\Contract`)
-  run against the database stores, in `tests/Contract/Sdk`. The mirrored
-  object-store and outbox traits are gone; the remaining host traits keep
-  only the behaviour the SDK's contracts leave open.
+  `composer require "lambda-twelve/one-record:^1.0.0-beta2"`.
+- The SDK's shipped store contracts run against the database stores as the
+  provider wires them: beta2 ships them as traits
+  (`LambdaTwelve\OneRecord\Testing\Contract\*ContractTests`), used inside
+  Testbench in `tests/Contract/Sdk`. The mirrored object-store and outbox
+  traits are gone; the remaining host traits keep only the behaviour the
+  SDK's contracts leave open.
 
 ### Fixed
 

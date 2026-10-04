@@ -6,16 +6,19 @@ namespace LambdaTwelve\OneRecord\Laravel\Tests\Contract\Sdk;
 
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseLogisticsObjectStore;
 use LambdaTwelve\OneRecord\Server\Spi\LogisticsObjectStore;
-use LambdaTwelve\OneRecord\Testing\Contract\LogisticsObjectStoreContract;
+use LambdaTwelve\OneRecord\Testing\Contract\LogisticsObjectStoreContractTests;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 #[CoversClass(DatabaseLogisticsObjectStore::class)]
-final class DatabaseLogisticsObjectStoreContractTest extends LogisticsObjectStoreContract
+final class DatabaseLogisticsObjectStoreContractTest extends SdkContractTestCase
 {
-    use UsesTheDatabaseStores;
+    use LogisticsObjectStoreContractTests;
 
     protected function createStore(): LogisticsObjectStore
     {
-        return new DatabaseLogisticsObjectStore($this->connection(), $this->tables());
+        $store = $this->app()->make(LogisticsObjectStore::class);
+        self::assertInstanceOf(DatabaseLogisticsObjectStore::class, $store);
+
+        return $store;
     }
 }
