@@ -28,6 +28,21 @@ All notable changes to this package are documented here. The format follows
 
 ### Fixed
 
+Findings of the sixth adversarial review (2026-10-04, the beta2 readiness
+pass), kept as regression tests in `tests/Feature/AdversarialReview6Test.php`:
+
+- Saving an action request whose access delegation names the same logistics
+  object twice failed on the projection's unique key once duplicates were no
+  longer ignored. The projection keeps one row per distinct object.
+- Replacing a request under the same IRI updated the document but not the
+  columns the SQL filters read (type, requester, request time, subscription
+  topic and subscriber), so a subscription moved to another object received
+  no notifications for it and a request whose payload type changed stayed
+  under its old type in `accepted()`. Every request-derived column now
+  follows the replacement; only `created_at` is the row's own. This predates
+  beta1.
+- The README's opening still named SDK beta3 and called the client
+  forthcoming.
 - Saving an action request again under the same IRI for another logistics
   object left the old object's projection row behind, so the request kept
   appearing in that object's audit trail and pending changes. The projection

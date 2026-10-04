@@ -3,14 +3,15 @@
 Laravel integration for [`lambda-twelve/one-record`](https://github.com/lambda-twelve/one-record),
 the framework-agnostic PHP implementation of **IATA ONE Record**.
 
-> **Status:** pre-release, `1.0.0-beta1`, following the SDK's `1.0.0-beta3`.
-> The public API may still change between betas; `CHANGELOG.md` records it.
+> **Status:** pre-release. `1.0.0-beta1` follows the SDK's `1.0.0-beta3`; the
+> main branch follows `1.0.0-beta5`. The public API may still change between
+> betas; `CHANGELOG.md` records it.
 
 ## What this package is
 
 The SDK implements the ONE Record protocol: the PSR-15 server with every
 endpoint, the action-request lifecycle, JSON-LD, the data model, RS256 tokens
-and (soon) the client. It has a hard rule: nothing in it knows about a
+and the client. It has a hard rule: nothing in it knows about a
 framework or a database. Everything a host must provide is an interface, with
 in-memory reference implementations.
 
@@ -51,7 +52,7 @@ honours a stability flag written in the root `composer.json`, so allow it for
 these two packages rather than lowering your application's minimum stability:
 
 ```sh
-composer require "lambda-twelve/one-record:^1.0.0-beta3" "lambda-twelve/one-record-laravel:^1.0@beta"
+composer require "lambda-twelve/one-record:^1.0.0-beta5" "lambda-twelve/one-record-laravel:^1.0@beta"
 ```
 
 The service provider is auto-discovered. Publish the configuration and, if you

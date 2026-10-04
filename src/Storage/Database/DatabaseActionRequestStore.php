@@ -68,18 +68,21 @@ final class DatabaseActionRequestStore implements ActionRequestStore
                 'document' => Json::encode($request->toJsonLd($version), false),
                 'created_at' => $now,
                 'updated_at' => $now,
-            ]], ['iri_hash'], ['status', 'status_since', 'last_modified', 'expires_at', 'api_version', 'document', 'updated_at']);
+                // save() replaces the request whole: every column derived from it follows (the type, the
+                // requester, the subscription projection, cleared when the new payload is not one), so the
+                // SQL filters agree with the document. Only created_at is the row's own (AR6-002).
+            ]], ['iri_hash'], ['type', 'status', 'requested_by_hash', 'requested_by', 'requested_at', 'status_since', 'last_modified', 'topic_type', 'topic', 'topic_hash', 'subscriber_hash', 'expires_at', 'api_version', 'document', 'updated_at']);
 
+            // The object projection follows too, so a request saved again under the same IRI for another
+            // object leaves no row behind on the old one (the SDK's contract since beta5). One row per
+            // distinct object: a payload may name the same IRI twice (AR6-001).
             $objects = [];
             foreach ($request->logisticsObjects() as $object) {
-                $objects[] = ['action_request_hash' => $hash, 'logistics_object_hash' => IriHash::of($object), 'logistics_object_iri' => $object->value];
+                $objects[IriHash::of($object)] = ['action_request_hash' => $hash, 'logistics_object_hash' => IriHash::of($object), 'logistics_object_iri' => $object->value];
             }
-            // save() replaces the request whole, the objects it concerns included: the projection
-            // follows, so a request saved again under the same IRI for another object leaves no row
-            // behind on the old one (the SDK's contract since beta5).
             $this->db->table($this->tables->actionRequestObjects())->where('action_request_hash', $hash)->delete();
             if ($objects !== []) {
-                $this->db->table($this->tables->actionRequestObjects())->insert($objects);
+                $this->db->table($this->tables->actionRequestObjects())->insert(array_values($objects));
             }
         });
     }
