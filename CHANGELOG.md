@@ -40,6 +40,17 @@ All notable changes to this package are documented here. The format follows
 
 ### Fixed
 
+Findings of the eighth adversarial review (2026-10-05, the beta6 pass), kept
+as regression tests in `tests/Feature/AdversarialReview8Test.php`; the
+seventh review's boundary probes are kept in `AdversarialReview7Test.php`:
+
+- Adapting the client binding to Guzzle 8 had filtered `one-record.http` down
+  to timeouts, `verify` and a string proxy, silently dropping client
+  certificates and keys, per-scheme proxies and default headers. The array
+  goes to Guzzle whole again, as it did before.
+- `ServerConfigFactory::problems()` judged the raw `languages` value while
+  `fromArray()` normalised it, so a configuration the runtime accepted was
+  reported as a problem. Both now share one normalisation.
 - The package could not be installed into a current Laravel application: it
   pinned Guzzle to `^7.9` while a fresh application ships Guzzle 8. The
   constraints are now `^7.9 || ^8.0` for Guzzle and `^2.7 || ^3.0` for its

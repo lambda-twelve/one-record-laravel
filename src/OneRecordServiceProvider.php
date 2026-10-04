@@ -173,7 +173,10 @@ final class OneRecordServiceProvider extends ServiceProvider
         foreach ([RequestFactoryInterface::class, ResponseFactoryInterface::class, ServerRequestFactoryInterface::class, StreamFactoryInterface::class, UploadedFileFactoryInterface::class, UriFactoryInterface::class] as $factory) {
             $this->app->bindIf($factory, static fn(Container $app): HttpFactory => $app->make(HttpFactory::class), true);
         }
-        $this->app->bindIf(ClientInterface::class, fn(): Client => new Client($this->httpOptions()), true);
+        // one-record.http is Guzzle's own options array and goes to the client whole: certificates, keys,
+        // proxies in any form, default headers, whatever the application set. Guzzle 8 declares the array
+        // as a closed shape, which an array read from configuration cannot satisfy statically (AR8-001).
+        $this->app->bindIf(ClientInterface::class, fn(): Client => new Client($this->arrayConfig('http')), true);   // @phpstan-ignore argument.type
         $this->app->singleton(self::LOGGER, function (Container $app): LoggerInterface {
             $channel = $this->config('log.channel');
 
@@ -391,31 +394,6 @@ final class OneRecordServiceProvider extends ServiceProvider
         }
 
         return $cache;
-    }
-
-    /**
-     * The Guzzle options `one-record.http` may set, typed as Guzzle 8 declares
-     * them: the timeouts, certificate verification and a proxy.
-     *
-     * @return array{timeout?: float, connect_timeout?: float, verify?: bool|string, proxy?: string}
-     */
-    private function httpOptions(): array
-    {
-        $http = $this->arrayConfig('http');
-        $options = [];
-        foreach (['timeout', 'connect_timeout'] as $key) {
-            if (is_numeric($http[$key] ?? null)) {
-                $options[$key] = (float) $http[$key];
-            }
-        }
-        if (\is_bool($http['verify'] ?? null) || (\is_string($http['verify'] ?? null) && $http['verify'] !== '')) {
-            $options['verify'] = $http['verify'];
-        }
-        if (\is_string($http['proxy'] ?? null) && $http['proxy'] !== '') {
-            $options['proxy'] = $http['proxy'];
-        }
-
-        return $options;
     }
 
     private function connection(Container $app): ConnectionInterface

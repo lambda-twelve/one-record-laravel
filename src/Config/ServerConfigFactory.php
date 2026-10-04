@@ -26,7 +26,6 @@ final class ServerConfigFactory
         $baseUrl = self::baseUrl($config['base_url'] ?? null);
         $basePath = self::basePath($config['base_path'] ?? '');
         $endpoint = $baseUrl . $basePath;
-        $languages = $config['languages'] ?? ['en-US'];
         $dataHolderType = $config['data_holder_type'] ?? null;
 
         return new ServerConfig(
@@ -35,7 +34,7 @@ final class ServerConfigFactory
             basePath: $basePath,
             apiVersions: self::versions($config['api_versions'] ?? null, 'api_versions', static fn(string $v): ?ApiVersion => ApiVersion::tryFromString($v)),
             dataModelVersions: self::versions($config['data_model_versions'] ?? null, 'data_model_versions', static fn(string $v): ?DataModelVersion => DataModelVersion::tryFromString($v)),
-            languages: \is_array($languages) ? array_values(array_map(static fn(mixed $l): string => \is_scalar($l) ? (string) $l : '', $languages)) : ['en-US'],
+            languages: self::languages($config['languages'] ?? null),
             maxBodyBytes: self::int($config['max_body_bytes'] ?? null, 1_048_576),
             embeddedDepth: self::int($config['embedded_depth'] ?? null, 3),
             bulkLogisticsEvents: (bool) ($config['bulk_logistics_events'] ?? false),
@@ -58,7 +57,7 @@ final class ServerConfigFactory
     {
         $problems = [];
         $settings = [
-            'languages' => $config['languages'] ?? ['en-US'],
+            'languages' => self::languages($config['languages'] ?? null),
             'maxBodyBytes' => self::int($config['max_body_bytes'] ?? null, 1_048_576),
             'embeddedDepth' => self::int($config['embedded_depth'] ?? null, 3),
         ];
@@ -91,6 +90,18 @@ final class ServerConfigFactory
         }
 
         return $problems === [] ? ServerConfig::problems($settings) : $problems;
+    }
+
+    /**
+     * The supported languages as the SDK wants them; anything but a list is
+     * read as the default, the same way for construction and for problems()
+     * so the two never disagree (AR8-002).
+     *
+     * @return list<string>
+     */
+    private static function languages(mixed $value): array
+    {
+        return \is_array($value) ? array_values(array_map(static fn(mixed $l): string => \is_scalar($l) ? (string) $l : '', $value)) : ['en-US'];
     }
 
     private static function int(mixed $value, int $default): int
