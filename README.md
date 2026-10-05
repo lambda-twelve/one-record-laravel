@@ -389,7 +389,9 @@ PostgreSQL. See `CONTRIBUTING.md`.
 ## Not yet supported
 
 - A default `NotificationDeliverer` and a partner client factory over the
-  SDK's PSR-18 client: pending the SDK's client release.
+  SDK's client (`LambdaTwelve\OneRecord\Client\OneRecordClient`, released):
+  the host-side wiring of credentials and endpoints per partner is what is
+  still to come; you bind your own deliverer meanwhile.
 - Multiple data holders in one application: the SDK serves one data holder
   per `Services`; resolve a per-tenant server yourself if you need more.
 

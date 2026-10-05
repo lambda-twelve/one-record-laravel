@@ -141,6 +141,12 @@ final class OneRecordServiceProvider extends ServiceProvider
             try {
                 $findings = ServerBuilder::check($app->make(Services::class));
                 $wiring = $findings === [] ? 'OK' : implode(' ', $findings);
+            } catch (InvalidArgumentException $e) {
+                // This provider and its factories refuse bad configuration outside one-record.server (auth
+                // issuers, the storage or auth driver, the policy's denial) with this exception; it is a
+                // configuration problem, not a wiring one (AR10-004).
+                $configuration = $e->getMessage();
+                $wiring = 'Not checked until the configuration is complete.';
             } catch (LogicException $e) {   // a binding the application still owes, such as a custom authenticator
                 $wiring = 'Not wired: ' . $e->getMessage();
             }

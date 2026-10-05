@@ -6,6 +6,27 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+Findings of the tenth adversarial review (2026-10-05, the beta7 pass), kept
+as regression tests in `tests/Feature/AdversarialReview10Test.php`:
+
+- The token endpoint route dropped its middleware when
+  `auth.token_endpoint.middleware` was a string rather than a list, so
+  `/oauth/token` ran without its throttle. Every route this package mounts
+  reads middleware the same way now, string or list.
+- `one-record:client:create` with a client id already registered ended in
+  the database's unique-key exception; it reports the taken id and exits
+  with the invalid code. `DatabaseClientCredentials::create()` throws
+  `ClientIdTaken`, from a savepoint.
+- `one-record:outbox:prune` turned a negative day count into a date in the
+  future and pruned every delivered row, today's included; days must be a
+  whole number, zero or more.
+- `php artisan about` reported a configuration error outside
+  `one-record.server` (the auth issuers, a driver name) as a wiring failure
+  under "Configuration OK"; it is shown as the configuration problem it is.
+- The README still called the SDK client unreleased.
+
 ### Changed
 
 - The SDK is required as `lambda-twelve/one-record:^1.0.0-beta7`. beta7

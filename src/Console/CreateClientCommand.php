@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use LambdaTwelve\OneRecord\Auth\ClientCredentialsVerifier;
+use LambdaTwelve\OneRecord\Laravel\Storage\Database\ClientIdTaken;
 use LambdaTwelve\OneRecord\Laravel\Storage\Database\DatabaseClientCredentials;
 use LambdaTwelve\OneRecord\Rdf\Iri;
 
@@ -48,7 +49,13 @@ final class CreateClientCommand extends Command
 
         $clientId = $this->stringOption('client-id') ?? Str::uuid()->toString();
         $secret = $this->stringOption('secret') ?? rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
-        $credentials->create($clientId, $secret, $iri, $this->stringOption('name'));
+        try {
+            $credentials->create($clientId, $secret, $iri, $this->stringOption('name'));
+        } catch (ClientIdTaken $e) {
+            $this->components->error($e->getMessage() . ' Choose another --client-id, or disable and re-create the partner.');
+
+            return self::INVALID;
+        }
 
         $this->components->info('Client registered. The secret is shown once; store it now.');
         $this->components->twoColumnDetail('client_id', $clientId);

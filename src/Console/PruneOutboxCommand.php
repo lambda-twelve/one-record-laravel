@@ -25,14 +25,31 @@ final class PruneOutboxCommand extends Command
             return self::FAILURE;
         }
         $now = $clock->now();
-        $delivered = $this->option('delivered-days');
-        $failed = $this->option('failed-days');
-        $removed = $outbox->prune(
-            $now->modify('-' . (is_numeric($delivered) ? (int) $delivered : 30) . ' days'),
-            $now->modify('-' . (is_numeric($failed) ? (int) $failed : 90) . ' days'),
-        );
+        $delivered = $this->days('delivered-days');
+        $failed = $this->days('failed-days');
+        if ($delivered === null || $failed === null) {
+            return self::INVALID;
+        }
+        $removed = $outbox->prune($now->modify('-' . $delivered . ' days'), $now->modify('-' . $failed . ' days'));
         $this->components->info(\sprintf('%d outbox row(s) removed.', $removed));
 
         return self::SUCCESS;
+    }
+
+    /**
+     * A whole number of days, zero or more. A negative number used to become
+     * "--1 days", which PHP reads as a day into the future, so a typo pruned
+     * every delivered row including today's (AR10-003).
+     */
+    private function days(string $option): ?int
+    {
+        $value = $this->option($option);
+        if (!is_numeric($value) || (int) $value < 0 || (string) (int) $value !== (string) $value) {
+            $this->components->error(\sprintf('--%s must be a whole number of days, zero or more; got "%s".', $option, \is_scalar($value) ? (string) $value : \gettype($value)));
+
+            return null;
+        }
+
+        return (int) $value;
     }
 }

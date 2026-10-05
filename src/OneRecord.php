@@ -65,9 +65,8 @@ final class OneRecord
 
         $router->group(self::group($app, $options, ''), static function (Router $router) use ($token, $jwks): void {
             if (($token['enabled'] ?? false) === true) {
-                $middleware = $token['middleware'] ?? [];
                 $router->post(\is_string($token['path'] ?? null) ? $token['path'] : '/oauth/token', TokenController::class)
-                    ->middleware(\is_array($middleware) ? array_values(array_filter($middleware, 'is_string')) : [])
+                    ->middleware(self::middleware($token['middleware'] ?? []))
                     ->name('token');
             }
             if (($jwks['enabled'] ?? false) === true) {
@@ -75,6 +74,22 @@ final class OneRecord
             }
         });
         $router->getRoutes()->refreshNameLookups();
+    }
+
+    /**
+     * Middleware as configured, a string or a list, read the same way for
+     * every route this package mounts (AR10-001: the token route used to
+     * drop a string, and with it its throttle).
+     *
+     * @return list<string>
+     */
+    private static function middleware(mixed $value): array
+    {
+        if (\is_string($value)) {
+            return $value === '' ? [] : [$value];
+        }
+
+        return \is_array($value) ? array_values(array_filter(array_map(static fn(mixed $m): string => \is_scalar($m) ? (string) $m : '', $value), static fn(string $m): bool => $m !== '')) : [];
     }
 
     /**
@@ -91,7 +106,7 @@ final class OneRecord
 
         $group = [
             'prefix' => $prefix,
-            'middleware' => \is_string($middleware) ? [$middleware] : (\is_array($middleware) ? array_values(array_map(static fn(mixed $m): string => \is_scalar($m) ? (string) $m : '', $middleware)) : []),
+            'middleware' => self::middleware($middleware),
             'as' => \is_string($name) ? $name : 'one-record.',
         ];
         if (\is_string($domain) && $domain !== '') {

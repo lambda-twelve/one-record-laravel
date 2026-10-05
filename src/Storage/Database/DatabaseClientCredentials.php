@@ -6,6 +6,7 @@ namespace LambdaTwelve\OneRecord\Laravel\Storage\Database;
 
 use Illuminate\Contracts\Hashing\Hasher;
 use Illuminate\Database\ConnectionInterface;
+use Illuminate\Database\UniqueConstraintViolationException;
 use LambdaTwelve\OneRecord\Auth\ClientCredentialsVerifier;
 use LambdaTwelve\OneRecord\Laravel\Support\Timestamps;
 use LambdaTwelve\OneRecord\Rdf\Iri;
@@ -49,11 +50,14 @@ final class DatabaseClientCredentials implements ClientCredentialsVerifier
 
     /**
      * Registers a client. The caller shows the secret once; only its hash is kept.
+     *
+     * @throws ClientIdTaken when the id is registered already (the unique key decides, in a savepoint so a
+     *                       refused insert does not poison an enclosing PostgreSQL transaction)
      */
     public function create(string $clientId, #[SensitiveParameter] string $clientSecret, Iri $agent, ?string $name = null): void
     {
         $now = Timestamps::toDb($this->clock->now());
-        $this->db->table($this->tables->clients())->insert([
+        $row = [
             'client_id' => $clientId,
             'secret_hash' => $this->hasher->make($clientSecret),
             'agent_iri' => $agent->value,
@@ -61,7 +65,14 @@ final class DatabaseClientCredentials implements ClientCredentialsVerifier
             'enabled' => true,
             'created_at' => $now,
             'updated_at' => $now,
-        ]);
+        ];
+        try {
+            $this->db->transaction(function () use ($row): void {
+                $this->db->table($this->tables->clients())->insert($row);
+            }, 1);
+        } catch (UniqueConstraintViolationException) {
+            throw new ClientIdTaken($clientId);
+        }
     }
 
     public function setEnabled(string $clientId, bool $enabled): bool
