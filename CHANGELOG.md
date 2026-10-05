@@ -6,7 +6,15 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- The SDK is required as `lambda-twelve/one-record:^1.0.0-beta7`. beta7
+  hardens the server's ingestion: one `GraphValidator` for every graph the
+  server takes in (creation, changes, events), embedded nodes judged
+  whatever id they carry, typed links and code lists checked against the
+  ontology, and a JWKS key published without `verify` in its `key_ops`, or
+  with a malformed member, refused and logged. Nothing in the SPI or the
+  shipped contracts changed; the host needed no code change.
 
 ## [1.0.0-beta2] - 2026-10-05
 
